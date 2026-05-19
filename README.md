@@ -1,4 +1,4 @@
-# 🌍 EthioFund — Community Crowdfunding Platform
+# 🌍 EthioFund-Crowdfunding Platform for Ethiopia
 
 > A PERN Stack web-based crowdfunding platform enabling Ethiopians to raise funds for medical, educational, funeral, emergency, and community initiatives with secure Chapa payment gateway integration.
 
