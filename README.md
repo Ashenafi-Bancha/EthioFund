@@ -219,300 +219,7 @@ pnpm --version          # Should be 8.0.0 or higher
 
 ---
 
-## 🚀 Installation & Setup
 
-### **Step 1: Clone or Download Project**
-
-```bash
-cd c:\Users\YourUsername\Desktop
-# Project is already at: c:\Users\Degu\Desktop\ethiofund
-```
-
-### **Step 2: Backend Setup**
-
-#### 2.1 Install Dependencies
-```bash
-cd c:\Users\Degu\Desktop\ethiofund\backend
-pnpm install
-```
-
-#### 2.2 Create Environment File
-Create `.env` file in `backend/` folder:
-
-```env
-# Server
-PORT=5000
-NODE_ENV=development
-
-# Database (PostgreSQL)
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=ethiofund_db
-DB_USER=ethiofund_user
-DB_PASSWORD=ethiofund_pass
-
-# Authentication
-JWT_SECRET=ethiofund_super_secret_key_change_in_production_12345
-JWT_EXPIRES_IN=7d
-
-# Chapa Payment Gateway (Test Mode)
-CHAPA_SECRET_KEY=CHASECK_TEST-qmirV56Qyr2jdZKfOOoAkupIxkR2kNib
-CHAPA_PUBLIC_KEY=CHAPUBK_TEST-YbysTtHQTXaHzIYD1D5rkUDswlpSJI3n
-CHAPA_ENCRYPTION_KEY=ex2lRdsJKdPNZ4alJAiCt4BF
-CHAPA_BASE_URL=https://api.chapa.co/v1
-
-# Gemini AI (Optional - for comment moderation)
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# URLs
-CLIENT_URL=http://localhost:5173
-SERVER_URL=https://your-cloudflare-tunnel-url.trycloudflare.com
-```
-
-**⚠️ Important Notes:**
-- Change `JWT_SECRET` to a secure random string in production
-- `SERVER_URL` should be your Cloudflare Tunnel URL when testing Chapa webhooks
-- For local testing without Chapa, use `SERVER_URL=http://localhost:5000`
-
-### **Step 3: Frontend Setup**
-
-#### 3.1 Install Dependencies
-```bash
-cd c:\Users\Degu\Desktop\ethiofund\frontend
-pnpm install
-```
-
-#### 3.2 Environment Configuration (if needed)
-Frontend automatically uses `http://localhost:5000/api` for local development.
-
-### **Step 4: Database Setup**
-
-#### 4.1 Verify PostgreSQL is Running
-```bash
-# Check if PostgreSQL service is running
-Get-Service PostgreSQL*
-
-# Output should show: Status = Running
-```
-
-#### 4.2 Create Database and User (First Time Only)
-```bash
-# Open PostgreSQL command line
-psql -U postgres
-
-# Execute inside psql:
-CREATE DATABASE ethiofund_db;
-CREATE USER ethiofund_user WITH PASSWORD 'ethiofund_pass';
-ALTER ROLE ethiofund_user SET client_encoding TO 'utf8';
-ALTER ROLE ethiofund_user SET default_transaction_isolation TO 'read committed';
-ALTER ROLE ethiofund_user SET default_transaction_deferrable TO on;
-GRANT ALL PRIVILEGES ON DATABASE ethiofund_db TO ethiofund_user;
-\q
-```
-
-#### 4.3 Apply Database Schema
-```bash
-# From project root or backend folder
-psql -U ethiofund_user -d ethiofund_db -f backend/database/schema.sql
-
-# You will be prompted for password: ethiofund_pass
-```
-
-**Expected Output:**
-```
-CREATE EXTENSION
-CREATE TABLE
-CREATE TABLE
-... (multiple table creation notices)
-```
-
-#### 4.4 (Optional) Seed Test Data
-```bash
-psql -U ethiofund_user -d ethiofund_db -f backend/database/seed.sql
-```
-
----
-
-## 🏃 Running the Project
-
-### **Option 1: Run All Services (Recommended for Testing)**
-
-#### Terminal 1: Start PostgreSQL (if not running as service)
-```bash
-# Usually runs as Windows service, just verify:
-Get-Service PostgreSQL*
-```
-
-#### Terminal 2: Start Backend Server
-```bash
-cd c:\Users\Degu\Desktop\ethiofund\backend
-pnpm dev
-```
-
-**Expected Output:**
-```
-EthioFund backend running on port 5000
-PostgreSQL connected successfully
-```
-
-#### Terminal 3: Start Frontend Server
-```bash
-cd c:\Users\Degu\Desktop\ethiofund\frontend
-pnpm dev
-```
-
-**Expected Output:**
-```
-VITE v6.3.5 ready in 1023 ms
-
-➜  Local:   http://localhost:5173/
-➜  Network: use --host to expose
-```
-
-#### Terminal 4: Start Cloudflare Tunnel (for Chapa webhook testing)
-```bash
-# Download from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-cloudflared tunnel --url http://localhost:5000
-```
-
-**Expected Output:**
-```
-Your quick tunnel has been created! Visit it at:
-https://abc-tunnel-1234.trycloudflare.com
-```
-
-**Update .env with this URL:**
-```env
-SERVER_URL=https://abc-tunnel-1234.trycloudflare.com
-```
-
-Then restart the backend.
-
----
-
-## 📊 Database Setup
-
-### **Database Credentials**
-| Setting | Value |
-|---------|-------|
-| Host | localhost |
-| Port | 5432 |
-| Database | ethiofund_db |
-| User | ethiofund_user |
-| Password | ethiofund_pass |
-
-### **Tables Created**
-| Table | Purpose |
-|-------|---------|
-| `users` | User accounts (donors, organizers, admins) |
-| `admins` | Admin access levels |
-| `campaigns` | Campaign listings |
-| `campaign_media` | Campaign images/videos |
-| `campaign_updates` | Campaign progress updates |
-| `milestones` | Campaign fundraising milestones |
-| `donations` | Donation records |
-| `transactions` | Payment transactions (tx_ref from Chapa) |
-| `payments` | Payment metadata |
-| `comments` | Campaign comments with moderation |
-| `withdrawals` | Organizer withdrawal requests |
-| `reports` | Generated analytics reports |
-| `activity_logs` | Audit trail of all actions |
-
-### **Connect to Database**
-```bash
-psql -U ethiofund_user -d ethiofund_db
-
-# View all tables
-\dt
-
-# View schema of a table
-\d campaigns
-
-# Exit
-\q
-```
-
----
-
-## 🔌 API Documentation
-
-### **Base URL**
-- **Local Development:** `http://localhost:5000/api`
-- **Production:** Use your deployed backend URL
-
-### **API Endpoints**
-
-#### **Authentication** (`/api/auth`)
-```http
-POST   /auth/register           Register new user
-POST   /auth/login              Login with email/password
-POST   /auth/logout             Logout (frontend deletes token)
-```
-
-#### **Campaigns** (`/api/campaigns`)
-```http
-GET    /campaigns               List all approved campaigns
-GET    /campaigns/:id           Get campaign details
-POST   /campaigns               Create new campaign (organizer only)
-PUT    /campaigns/:id           Update campaign (owner only)
-POST   /campaigns/:id/updates   Post campaign update
-GET    /campaigns/:id/updates   Get campaign updates
-PATCH  /campaigns/:id/approve   Approve campaign (admin only)
-PATCH  /campaigns/:id/reject    Reject campaign (admin only)
-```
-
-#### **Donations** (`/api/donations`)
-```http
-GET    /donations/my            Get my donations (authenticated)
-GET    /donations/campaign/:id  Get campaign donations
-```
-
-#### **Payments** (`/api/payments`)
-```http
-POST   /payments/initialize     Start payment process
-GET    /payments/verify/:tx_ref Chapa callback redirect
-POST   /payments/webhook        Chapa webhook handler
-```
-
-#### **Comments** (`/api/comments`)
-```http
-POST   /comments                Add comment to campaign
-GET    /comments/campaign/:id   Get campaign comments
-```
-
-#### **Withdrawals** (`/api/withdrawals`)
-```http
-POST   /withdrawals             Request withdrawal (organizer)
-GET    /withdrawals/my          Get my withdrawals (organizer)
-GET    /withdrawals/pending     Get pending withdrawals (admin)
-PATCH  /withdrawals/:id/approve Approve withdrawal (admin)
-PATCH  /withdrawals/:id/reject  Reject withdrawal (admin)
-```
-
-#### **Admin** (`/api/admin`)
-```http
-GET    /admin/dashboard         Admin dashboard stats
-GET    /admin/users             Get all users
-PATCH  /admin/users/:id/suspend Suspend user
-PATCH  /admin/users/:id/activate Activate user
-GET    /admin/campaigns         Get all campaigns
-```
-
-#### **Reports** (`/api/reports`)
-```http
-GET    /reports?type=campaign   Campaign report
-GET    /reports?type=donation   Donation report
-GET    /reports?type=user       User report
-GET    /reports?type=financial  Financial report
-```
-
-#### **Users** (`/api/users`)
-```http
-GET    /users/me                Get current user profile
-PUT    /users/me                Update profile
-```
-
----
 
 ## 🎨 Features
 
@@ -612,17 +319,7 @@ Authorization: Bearer {JWT_TOKEN}
 
 ---
 
-## 📚 Project Documentation
 
-| Document | Location | Purpose |
-|----------|----------|---------|
-| **README.md** | Root | Project overview (this file) |
-| **ARCHITECTURE.md** | backend/ | Backend architecture details |
-| **STRUCTURE_CLEANUP_SUMMARY.md** | backend/ | Module-based structure guide |
-| **copilot-prompt.md** | Root | Complete project specification |
-| **LOCAL_SETUP_GUIDE.md** | frontend/ | Frontend setup instructions |
-
----
 
 ## 🔐 Security Features
 
@@ -707,50 +404,17 @@ git clone <repository-url>
 cd ethiofund
 ```
 
-### **Create Feature Branch**
-```bash
-git checkout -b feature/your-feature-name
-```
-
-### **Commit Changes**
-```bash
-git add .
-git commit -m "Add your descriptive message"
-```
-
-### **Push to Remote**
-```bash
-git push origin feature/your-feature-name
-```
-
-### **Create Pull Request**
-- Go to GitHub/GitLab repository
-- Create PR from your branch
-- Add description
-- Request review
+#
 
 ---
 
-## 🎓 Learning Resources
 
-- **React Documentation:** https://react.dev
-- **Express.js Guide:** https://expressjs.com
-- **PostgreSQL Docs:** https://www.postgresql.org/docs
-- **Tailwind CSS:** https://tailwindcss.com/docs
-- **JWT Tokens:** https://jwt.io
-- **TypeScript:** https://www.typescriptlang.org/docs
 
 ---
 
 ## 👨‍💼 Team & Contribution
 
-### **Project Roles**
-- **Product Manager:** Define requirements and priorities
-- **Frontend Developers:** Build React UI components
-- **Backend Developers:** Build Express API and services
-- **Database Administrator:** Manage PostgreSQL schema
-- **QA Testers:** Test features and report bugs
-- **DevOps Engineer:** Deploy and maintain infrastructure
+
 
 ### **How to Contribute**
 1. Create a feature branch
@@ -772,15 +436,7 @@ git push origin feature/your-feature-name
 
 ---
 
-## 📞 Support
 
-For questions or issues:
-1. Check documentation files (ARCHITECTURE.md, README.md)
-2. Review error messages carefully
-3. Check browser console for frontend errors
-4. Check terminal output for backend errors
-5. Contact project maintainers
-6. Create GitHub issue with details
 
 ---
 
@@ -820,14 +476,5 @@ cloudflared tunnel --url http://localhost:5000
 # Then open: http://localhost:5173
 ```
 
----
 
-## 🎉 You're Ready!
 
-Visit **http://localhost:5173** and start testing EthioFund!
-
----
-
-**Last Updated:** May 19, 2026  
-**Version:** 1.0.0  
-**Status:** Production Ready
