@@ -1,0 +1,36 @@
+import type { NextFunction, Request, Response } from 'express';
+import * as usersService from './users.service';
+
+export const getMe = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const user = await usersService.getById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    return res.status(200).json({ success: true, user });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const updateMe = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const updated = await usersService.update(req.user.userId, req.body);
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    return res.status(200).json({ success: true, user: updated });
+  } catch (error) {
+    return next(error);
+  }
+};
