@@ -1,4 +1,4 @@
-# 🌍 EthioFund-Crowdfunding Platform for Ethiopia
+# 🌍 EthioFund - Crowdfunding Platform for Ethiopia
 
 > A PERN Stack web-based crowdfunding platform enabling Ethiopians to raise funds for medical, educational, funeral, emergency, and community initiatives with secure Chapa payment gateway integration.
 
@@ -9,83 +9,63 @@
 - [Project Overview](#-project-overview)
 - [Technology Stack](#-technology-stack)
 - [Project Structure](#-project-structure)
-- [Prerequisites](#-prerequisites)
-- [Installation & Setup](#-installation--setup)
-- [Running the Project](#-running-the-project)
-- [Database Setup](#-database-setup)
-- [API Documentation](#-api-documentation)
+- [Getting Started](#-getting-started)
 - [Features](#-features)
-- [Team & Contribution](#-team--contribution)
+- [Testing the Platform](#-testing-the-platform)
+- [Troubleshooting](#-troubleshooting)
 
 ---
 
 ## 🎯 Project Overview
 
-**EthioFund** is a full-stack crowdfunding platform designed for the Ethiopian community. The platform allows:
+**EthioFund** is a full-stack crowdfunding platform for the Ethiopian community with different user roles:
 
-- **Donors** to browse campaigns, donate via Chapa payment gateway, and track donation history
-- **Campaign Organizers** to create campaigns, post updates, request fund withdrawals
-- **Admins** to manage campaigns, verify withdrawals, monitor platform activity, generate reports
-- **Guests** to view campaigns and share them on social media
+- **Donors:** Browse campaigns, donate securely via Chapa, track donation history
+- **Organizers:** Create campaigns, post updates, request fund withdrawals
+- **Admins:** Manage campaigns, verify withdrawals, monitor activity, generate reports
+- **Guests:** View campaigns and share on social media
 
 ### Key Features
 
-✅ User authentication with JWT (7-day expiry)  
+✅ JWT authentication (7-day expiry)  
 ✅ Role-based access control (donor, organizer, admin)  
 ✅ Campaign management (create, approve, reject, suspend)  
-✅ Chapa payment gateway integration (test mode)  
-✅ Gemini AI-powered comment moderation  
-✅ Activity logging for audit trail  
-✅ Real-time campaign updates  
-✅ Withdrawal request management  
+✅ Chapa payment gateway integration  
+✅ AI-powered comment moderation (Gemini)  
+✅ Activity logging & audit trail  
+✅ Campaign updates & withdrawal requests  
 ✅ Platform analytics & reporting  
-✅ Cloudflare Tunnel for webhook testing  
 
 ---
 
 ## 🛠️ Technology Stack
 
 ### **Frontend**
-- **Framework:** React 
-- **UI Library:** Shadcn/ui (Radix UI components)
-- **Styling:** Tailwind CSS 4.1.12
-- **HTTP Client:** Axios
-- **State Management:** React Context API
-- **Build Tool:** Vite
-- **Language:** TypeScript
-- **Routing:** React Router 
+- React + TypeScript
+- Vite (build tool)
+- Tailwind CSS 4.1.12 (styling)
+- Shadcn/ui + Radix UI (components)
+- React Router (routing)
+- Axios (HTTP client)
+- React Context API (state management)
 
 ### **Backend**
-- **Runtime:** Node.js 16+
-- **Framework:** Express.js 5.2.1
-- **Language:** TypeScript
-- **Database Driver:** pg (PostgreSQL) 8.20.0
-- **Authentication:** JWT (jsonwebtoken 9.0.3)
-- **Password Hashing:** bcryptjs 3.0.3
-- **Validation:** express-validator 7.3.2
-- **File Uploads:** multer 2.1.1
-- **Security:** Helmet 8.1.0
-- **CORS:** cors 2.8.6
-- **HTTP Requests:** axios 1.16.0
-- **Logging:** morgan 1.10.1
-- **Utilities:** uuid 14.0.0, dotenv 17.4.2
+- Node.js 16+ + Express.js 5.2.1
+- TypeScript
+- PostgreSQL 18 (database)
+- JWT authentication
+- bcryptjs (password hashing)
+- express-validator (input validation)
+- Helmet (security headers)
+- morgan (logging)
 
-### **Database**
-- **DBMS:** PostgreSQL 18
-- **Connection Pool:** pg (node-postgres)
-- **Tables:** 11 (users, campaigns, donations, payments, comments, withdrawals, etc.)
-- **Features:** Foreign keys, constraints, indexes, cascading deletes
+### **Payment & Integrations**
+- Chapa (Ethiopian payment provider)
+- Gemini AI (comment moderation)
+- Cloudflare Tunnel (webhook testing)
 
-### **Payment Gateway**
-- **Provider:** Chapa (Ethiopian payment provider)
-- **Mode:** Test mode with test cards
-- **Integration:** API-based with idempotent verification
-
-### **DevOps & Tools**
-- **Package Manager:** pnpm (frontend & backend)
-- **Version Control:** Git
-- **Tunneling:** Cloudflare Tunnel (for webhook testing)
-- **Development Server:** Vite (frontend), tsx watch (backend)
+### **Package Manager**
+- pnpm (for both frontend and backend)
 
 ---
 
@@ -194,80 +174,102 @@ ethiofund/
 
 ---
 
-## ✅ Prerequisites
+## 🚀 Getting Started
 
-Before running the project, ensure you have installed:
+### Prerequisites
 
-### **System Requirements**
-- **Node.js:** 16.x or higher
-- **PostgreSQL:** 12.x or higher (version 18 recommended)
-- **npm/pnpm:** Latest version (pnpm 8+)
-- **Git:** For version control
-- **Cloudflare Tunnel:** For webhook testing (optional but recommended)
+Ensure you have the following installed:
+- **Node.js** 16+ 
+- **PostgreSQL** 12+ (recommended: version 18)
+- **pnpm** 8+ (or npm)
+- **Git**
+- **Cloudflare Tunnel** (optional, for Chapa webhook testing)
 
-### **Verify Installation**
+### Installation
+
+1. **Clone the repository:**
 ```bash
-# Check Node.js
-node --version          # Should be v16.0.0 or higher
-
-# Check PostgreSQL
-psql --version          # Should be 12 or higher
-
-# Check pnpm
-pnpm --version          # Should be 8.0.0 or higher
+git clone <repository-url>
+cd ethiofund
 ```
 
+2. **Setup Backend:**
+```bash
+cd backend
+pnpm install
+cp .env.example .env
+# Update .env with your database credentials and Chapa API keys
+```
+
+3. **Setup Frontend:**
+```bash
+cd ../frontend
+pnpm install
+```
+
+4. **Setup Database:**
+```bash
+# Create database and run schema
+psql -U postgres
+CREATE DATABASE ethiofund_db;
+# Import schema and seed data
+psql -U postgres -d ethiofund_db -f ../backend/database/schema.sql
+psql -U postgres -d ethiofund_db -f ../backend/database/seed.sql
+```
+
+5. **Run the Application:**
+```bash
+# Terminal 1: Backend (from backend directory)
+pnpm dev
+
+# Terminal 2: Frontend (from frontend directory)
+pnpm dev
+
+# Terminal 3: Cloudflare Tunnel (for payment webhook testing)
+cloudflared tunnel --url http://localhost:5000
+```
+
+Access the frontend at `http://localhost:5173`
+
 ---
-
-
 
 ## 🎨 Features
 
-### **For Donors**
-✅ Browse active campaigns by category  
-✅ View detailed campaign information and progress  
-✅ Donate securely via Chapa payment gateway  
-✅ View donation history and receipt  
-✅ Leave comments on campaigns  
-✅ Share campaigns on social media  
-✅ Track campaign updates  
+### **Donor Features**
+- Browse and search campaigns
+- Donate securely via Chapa
+- View donation history & receipts
+- Leave comments on campaigns
+- Share campaigns on social media
+- Receive real-time campaign updates
 
-### **For Campaign Organizers**
-✅ Create campaigns with goal amount and category  
-✅ Upload campaign images/videos  
-✅ Post campaign updates to backers  
-✅ View real-time donation progress  
-✅ Request fund withdrawal  
-✅ View withdrawal status  
-✅ Respond to donor comments  
+### **Organizer Features**
+- Create and manage campaigns
+- Upload campaign images/videos
+- Post updates to donors
+- Track donation progress
+- Request fund withdrawals
+- Respond to comments
 
-### **For Admins**
-✅ View platform dashboard (stats overview)  
-✅ Approve/reject pending campaigns  
-✅ Suspend/reactivate campaigns  
-✅ Manage user accounts (suspend/activate)  
-✅ Review and approve/reject withdrawal requests  
-✅ Generate campaign, donation, user, financial reports  
-✅ View activity logs for audit trail  
+### **Admin Features**
+- View platform dashboard & statistics
+- Approve/reject/suspend campaigns
+- Manage user accounts
+- Review and approve withdrawals
+- Generate reports (campaigns, donations, users, finances)
+- View activity logs
 
-### **AI-Powered Features**
-✅ Gemini AI comment moderation  
-✅ Automatic classification (approved/pending review/rejected)  
-✅ Graceful fallback if API unavailable  
-
-### **Payment Features**
-✅ Chapa payment gateway integration  
-✅ Test mode with test credit cards  
-✅ Idempotent payment verification (no double-crediting)  
-✅ Webhook handling for payment updates  
-✅ Cloudflare Tunnel support for local testing  
+### **Additional Features**
+- AI-powered comment moderation (Gemini)
+- Secure payment processing with idempotent verification
+- Comprehensive audit logging
 
 ---
 
-## 👥 Testing the Platform
+## 🧪 Testing the Platform
 
-### **Test User Accounts**
-After running `seed.sql`, you have:
+### Default Test Users
+After running the seed data, use these credentials:
 
 | Email | Password | Role |
 |-------|----------|------|
@@ -275,22 +277,21 @@ After running `seed.sql`, you have:
 | organizer1@email.com | Organizer@1234 | Organizer |
 | donor1@email.com | Donor@1234 | Donor |
 
-### **Test Chapa Payment**
-1. Login as donor
-2. Open a campaign
-3. Click "Donate Now"
-4. Fill donation form
-5. Use test card: **5200828282828282**
-6. Month/Year: Any future date
-7. CVC: Any 3 digits
-8. Click Pay
-9. Should redirect to success or failure page
+### Testing Chapa Payments
+1. Login as a donor
+2. Open any campaign
+3. Click "Donate Now" button
+4. Fill the donation form
+5. Use test card: `5200828282828282`
+6. Use any future expiry date
+7. Use any 3-digit CVC
+8. Complete the payment
 
-### **API Testing**
-Use VS Code REST Client or Postman to test endpoints:
+### API Testing Example
+Use REST Client or Postman to test endpoints:
 
-**Example: Register new user**
 ```http
+# Register new user
 POST http://localhost:5000/api/auth/register
 Content-Type: application/json
 
@@ -303,15 +304,15 @@ Content-Type: application/json
 }
 ```
 
-**Example: Create campaign (as organizer)**
 ```http
+# Create campaign (requires auth token)
 POST http://localhost:5000/api/campaigns
 Content-Type: application/json
 Authorization: Bearer {JWT_TOKEN}
 
 {
   "title": "Medical Campaign",
-  "description": "Help Ahmed's surgery",
+  "description": "Help with surgery costs",
   "goal_amount": 50000,
   "category": "medical"
 }
@@ -319,69 +320,54 @@ Authorization: Bearer {JWT_TOKEN}
 
 ---
 
+## 🔐 Security
 
-
-## 🔐 Security Features
-
-✅ **Password Security:** bcryptjs hashing (12 salt rounds)  
-✅ **API Security:** JWT authentication with 7-day expiry  
-✅ **Authorization:** Role-based access control (RBAC)  
-✅ **Input Validation:** express-validator on all endpoints  
-✅ **CORS:** Configured for frontend origin only  
-✅ **Security Headers:** Helmet middleware enabled  
-✅ **Database Security:** Foreign keys, constraints, cascading deletes  
-✅ **Secrets:** Never hardcoded (all in .env)  
-✅ **Activity Logging:** Audit trail for all actions  
-✅ **Payment Security:** Idempotent verification to prevent fraud  
+- Password hashing with bcryptjs (12 salt rounds)
+- JWT authentication with 7-day expiry
+- Role-based access control (RBAC)
+- Input validation on all endpoints
+- Security headers with Helmet
+- CORS configured for frontend only
+- Database constraints and cascading deletes
+- Secrets stored in environment variables
+- Activity logging for audit trails
+- Idempotent payment verification
 
 ---
 
 ## 🐛 Troubleshooting
 
-### **Backend Won't Start**
+### Backend Won't Start
 ```bash
-# Check if port 5000 is in use
+# Verify Node.js and pnpm are installed
+node --version
+pnpm --version
+
+# Reinstall dependencies
+pnpm install
+
+# Check if port 5000 is available
 netstat -ano | findstr :5000
-
-# Kill process if needed (replace PID)
-taskkill /PID 12345 /F
-
-# Restart backend
-pnpm dev
 ```
 
-### **PostgreSQL Connection Error**
-```bash
-# Verify PostgreSQL is running
-Get-Service PostgreSQL*
+### PostgreSQL Connection Error
+- Verify PostgreSQL is running
+- Check database name and credentials in `.env`
+- Ensure database user has correct permissions
+- Confirm schema and seed data are imported
 
-# Check credentials in .env
-# Ensure database and user exist
-psql -U ethiofund_user -d ethiofund_db
-```
+### Frontend Can't Connect to Backend
+- Verify backend is running on port 5000
+- Check CORS configuration in backend
+- Clear browser cache and restart frontend dev server
 
-### **Frontend Can't Connect to Backend**
-```bash
-# Verify backend is running on port 5000
-curl http://localhost:5000/api/health
+### Chapa Payment Issues
+- Verify Cloudflare Tunnel is running
+- Update webhook URL in Chapa dashboard
+- Check SERVER_URL in `.env` matches tunnel URL
+- Ensure test mode is enabled in Chapa
 
-# Check CORS in backend/src/app.ts
-# Should allow http://localhost:5173
-```
-
-### **Chapa Payment Not Working**
-```bash
-# Verify Cloudflare Tunnel is running
-cloudflared tunnel --url http://localhost:5000
-
-# Update SERVER_URL in .env with tunnel URL
-# Update Chapa dashboard webhook URL
-
-# Restart backend
-pnpm dev
-```
-
-### **Clear Build Artifacts**
+### Clear Build Cache
 ```bash
 # Frontend
 cd frontend
@@ -398,83 +384,28 @@ pnpm install
 
 ## 📝 Git Workflow
 
-### **Clone Repository**
-```bash
-git clone <repository-url>
-cd ethiofund
-```
-
-#
-
----
-
-
-
----
-
-## 👨‍💼 Team & Contribution
-
-
-
-### **How to Contribute**
-1. Create a feature branch
-2. Make your changes
-3. Commit with clear messages
-4. Push to remote
+1. Clone repository: `git clone <repository-url>`
+2. Create feature branch: `git checkout -b feature/your-feature`
+3. Make changes and commit with clear messages
+4. Push to remote: `git push origin feature/your-feature`
 5. Create pull request with description
-6. Wait for code review
-7. Address feedback if any
-8. Merge to main branch
+6. Address code review feedback
+7. Merge after approval
 
-### **Code Style**
+## 💻 Development Guidelines
+
 - Use TypeScript for type safety
-- Follow ESLint rules
-- Use Prettier for formatting
-- Write descriptive variable names
+- Follow ESLint configuration
+- Write descriptive variable and function names
 - Add comments for complex logic
 - Keep functions small and focused
-
----
-
-
+- Test features before creating PR
 
 ---
 
 ## 📄 License
 
 This project is confidential and intended for evaluation only.
-
----
-
-## ✅ Checklist for Testers/Evaluators
-
-Before testing, ensure:
-
-- [ ] Node.js 16+ installed
-- [ ] PostgreSQL 12+ installed
-- [ ] Backend `.env` file created with Chapa keys
-- [ ] Database created and schema applied
-- [ ] Backend running on port 5000
-- [ ] Frontend running on port 5173
-- [ ] Cloudflare Tunnel running (for Chapa testing)
-- [ ] Test data seeded (optional)
-- [ ] Chapa test mode enabled
-
-### **Quick Start Command (Windows PowerShell)**
-```powershell
-# Terminal 1: Backend
-cd "C:\Users\Degu\Desktop\ethiofund\backend"
-pnpm dev
-
-# Terminal 2: Frontend
-cd "C:\Users\Degu\Desktop\ethiofund\frontend"
-pnpm dev
-
-# Terminal 3: Cloudflare Tunnel
-cloudflared tunnel --url http://localhost:5000
-
-# Then open: http://localhost:5173
-```
 
 
 
