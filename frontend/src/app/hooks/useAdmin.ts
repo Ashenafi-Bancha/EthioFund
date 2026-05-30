@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 export interface AdminStatsResponse {
   users: number;
@@ -28,6 +29,16 @@ export interface PendingWithdrawalResponse {
   created_at: string;
 }
 
+export interface PendingCommentResponse {
+  id: string;
+  campaign_id: string;
+  campaign_title: string;
+  user_name: string;
+  message: string;
+  moderation_reason: string;
+  created_at: string;
+}
+
 interface UseAdminStatsResult {
   stats: AdminStatsResponse | null;
   loading: boolean;
@@ -46,6 +57,12 @@ interface UsePendingWithdrawalsResult {
   error: string | null;
 }
 
+interface UsePendingCommentsResult {
+  comments: PendingCommentResponse[];
+  loading: boolean;
+  error: string | null;
+}
+
 interface UseApproveCampaignResult {
   loading: boolean;
   error: string | null;
@@ -58,10 +75,17 @@ interface UseRejectCampaignResult {
   rejectCampaign: (campaignId: string, reason: string) => Promise<boolean>;
 }
 
+interface UseReviewCommentResult {
+  loading: boolean;
+  error: string | null;
+  reviewComment: (commentId: string, decision: 'approved' | 'rejected', reason?: string) => Promise<boolean>;
+}
+
 /**
  * Fetch admin dashboard stats
  */
 export const useAdminStats = (): UseAdminStatsResult => {
+  const { token } = useAuth();
   const [stats, setStats] = useState<AdminStatsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +95,9 @@ export const useAdminStats = (): UseAdminStatsResult => {
       try {
         setLoading(true);
         setError(null);
-        const response = await apiRequest<{ success?: boolean; stats?: AdminStatsResponse }>('/admin/stats');
+        const response = await apiRequest<{ success?: boolean; stats?: AdminStatsResponse }>('/admin/stats', {
+          authToken: token,
+        });
         setStats(response.stats ?? null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch admin stats');
@@ -82,7 +108,7 @@ export const useAdminStats = (): UseAdminStatsResult => {
     };
 
     fetchStats();
-  }, []);
+  }, [token]);
 
   return { stats, loading, error };
 };
@@ -91,6 +117,7 @@ export const useAdminStats = (): UseAdminStatsResult => {
  * Fetch pending campaign approvals
  */
 export const usePendingCampaigns = (): UsePendingCampaignsResult => {
+  const { token } = useAuth();
   const [campaigns, setCampaigns] = useState<PendingCampaignResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +136,9 @@ export const usePendingCampaigns = (): UsePendingCampaignsResult => {
           category: string;
           goal_amount: string | number;
           created_at: string;
-        }[] }>( '/campaigns?status=pending');
+        }[] }>( '/campaigns?status=pending', {
+          authToken: token,
+        });
         const data = response.campaigns ?? [];
         setCampaigns(
           data.map((campaign) => ({
@@ -131,7 +160,7 @@ export const usePendingCampaigns = (): UsePendingCampaignsResult => {
     };
 
     fetchCampaigns();
-  }, []);
+  }, [token]);
 
   return { campaigns, loading, error };
 };
@@ -140,6 +169,7 @@ export const usePendingCampaigns = (): UsePendingCampaignsResult => {
  * Fetch pending withdrawal requests
  */
 export const usePendingWithdrawals = (): UsePendingWithdrawalsResult => {
+  const { token } = useAuth();
   const [withdrawals, setWithdrawals] = useState<PendingWithdrawalResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,7 +188,9 @@ export const usePendingWithdrawals = (): UsePendingWithdrawalsResult => {
           bank_account?: string;
           status: 'pending' | 'approved' | 'rejected' | 'paid';
           request_date?: string;
-        }[] }>('/admin/withdrawals');
+        }[] }>('/admin/withdrawals', {
+          authToken: token,
+        });
         const data = response.withdrawals ?? [];
         setWithdrawals(
           data.map((withdrawal) => ({
@@ -180,7 +212,7 @@ export const usePendingWithdrawals = (): UsePendingWithdrawalsResult => {
     };
 
     fetchWithdrawals();
-  }, []);
+  }, [token]);
 
   return { withdrawals, loading, error };
 };
@@ -189,6 +221,7 @@ export const usePendingWithdrawals = (): UsePendingWithdrawalsResult => {
  * Approve a campaign
  */
 export const useApproveCampaign = (): UseApproveCampaignResult => {
+  const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -198,6 +231,7 @@ export const useApproveCampaign = (): UseApproveCampaignResult => {
       setError(null);
       await apiRequest(`/admin/campaigns/${campaignId}/approve`, {
         method: 'PATCH',
+        authToken: token,
         body: JSON.stringify({ status: 'active' }),
       });
       return true;
@@ -217,6 +251,7 @@ export const useApproveCampaign = (): UseApproveCampaignResult => {
  * Reject a campaign
  */
 export const useRejectCampaign = (): UseRejectCampaignResult => {
+  const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -226,6 +261,7 @@ export const useRejectCampaign = (): UseRejectCampaignResult => {
       setError(null);
       await apiRequest(`/admin/campaigns/${campaignId}/approve`, {
         method: 'PATCH',
+        authToken: token,
         body: JSON.stringify({ status: 'rejected', reason }),
       });
       return true;
@@ -239,4 +275,86 @@ export const useRejectCampaign = (): UseRejectCampaignResult => {
   };
 
   return { loading, error, rejectCampaign };
+};
+
+/**
+ * Fetch pending comments that require admin moderation
+ */
+export const usePendingComments = (): UsePendingCommentsResult => {
+  const { token } = useAuth();
+  const [comments, setComments] = useState<PendingCommentResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPendingComments = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiRequest<{ success?: boolean; comments?: {
+          comment_id?: string | number;
+          campaign_id: string | number;
+          campaign_title?: string;
+          user_name?: string;
+          content?: string;
+          moderation_reason?: string;
+          created_at: string;
+        }[] }>('/comments/pending/review', {
+          authToken: token,
+        });
+
+        const rows = response.comments ?? [];
+        setComments(
+          rows.map((comment) => ({
+            id: String(comment.comment_id ?? ''),
+            campaign_id: String(comment.campaign_id),
+            campaign_title: comment.campaign_title ?? 'Campaign',
+            user_name: comment.user_name ?? 'Community member',
+            message: comment.content ?? '',
+            moderation_reason: comment.moderation_reason ?? 'Needs admin review',
+            created_at: comment.created_at,
+          }))
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch pending comments');
+        setComments([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPendingComments();
+  }, [token]);
+
+  return { comments, loading, error };
+};
+
+/**
+ * Approve or reject a pending comment
+ */
+export const useReviewComment = (): UseReviewCommentResult => {
+  const { token } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const reviewComment = async (commentId: string, decision: 'approved' | 'rejected', reason?: string): Promise<boolean> => {
+    try {
+      setLoading(true);
+      setError(null);
+      await apiRequest(`/comments/${commentId}/review`, {
+        method: 'PATCH',
+        authToken: token,
+        body: JSON.stringify({ decision, reason }),
+      });
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to review comment';
+      setError(message);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { loading, error, reviewComment };
 };

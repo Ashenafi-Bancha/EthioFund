@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiRequest } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 
 type CommentApiRow = {
   id?: string;
@@ -44,7 +45,7 @@ interface UseCommentsResult {
 interface UseAddCommentResult {
   loading: boolean;
   error: string | null;
-  addComment: (data: CreateCommentInput) => Promise<CommentResponse | null>;
+  addComment: (data: CreateCommentInput) => Promise<{ comment: CommentResponse; pendingReview: boolean } | null>;
 }
 
 /**
@@ -87,15 +88,17 @@ export const useCampaignComments = (campaignId: string | null): UseCommentsResul
  * Add a comment to a campaign
  */
 export const useAddComment = (): UseAddCommentResult => {
+  const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const addComment = async (data: CreateCommentInput): Promise<CommentResponse | null> => {
+  const addComment = async (data: CreateCommentInput): Promise<{ comment: CommentResponse; pendingReview: boolean } | null> => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiRequest<{ success?: boolean; comment?: CommentApiRow }>('/comments', {
+      const response = await apiRequest<{ success?: boolean; comment?: CommentApiRow; moderation?: { decision?: string } }>('/comments', {
         method: 'POST',
+        authToken: token,
         body: JSON.stringify({
           campaign_id: data.campaign_id,
           content: data.message,
@@ -105,7 +108,10 @@ export const useAddComment = (): UseAddCommentResult => {
         return null;
       }
 
-      return normalizeComment(response.comment);
+      return {
+        comment: normalizeComment(response.comment),
+        pendingReview: response.moderation?.decision === 'pending_review',
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add comment';
       setError(message);

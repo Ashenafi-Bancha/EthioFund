@@ -2,6 +2,22 @@ const rawApiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api
 
 export const apiBaseUrl = rawApiBaseUrl.replace(/\/$/, '');
 
+export const resolveApiUrl = (value?: string | null): string => {
+  if (!value) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  if (value.startsWith('/')) {
+    return `${apiBaseUrl.replace(/\/api$/, '')}${value}`;
+  }
+
+  return value;
+};
+
 type RequestOptions = RequestInit & {
   authToken?: string | null;
 };
@@ -23,7 +39,9 @@ async function parseResponse<T>(response: Response): Promise<T> {
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
 
-  if (!headers.has('Content-Type') && options.body) {
+  const hasFormDataBody = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
+  if (!headers.has('Content-Type') && options.body && !hasFormDataBody) {
     headers.set('Content-Type', 'application/json');
   }
 

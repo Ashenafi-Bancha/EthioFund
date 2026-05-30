@@ -1,6 +1,8 @@
 import pool from '../../config/db';
 import { moderateCommentContent } from './comments.moderation.service';
 
+type ModerationStatus = 'approved' | 'pending_review' | 'rejected';
+
 export const addComment = async (userId: string, campaignId: string, content: string) => {
   const moderation = await moderateCommentContent(content);
 
@@ -53,4 +55,39 @@ export const deleteComment = async (commentId: string, userId: string, role: str
 
   await pool.query('DELETE FROM comments WHERE comment_id = $1', [commentId]);
   return true;
+};
+
+export const getPendingComments = async () => {
+  const result = await pool.query(
+    `SELECT c.comment_id, c.content, c.user_id, c.campaign_id, c.moderation_status, c.moderation_reason, c.moderation_score, c.moderated_at, c.created_at,
+            u.full_name AS user_name, cp.title AS campaign_title
+     FROM comments c
+     LEFT JOIN users u ON u.user_id = c.user_id
+     LEFT JOIN campaigns cp ON cp.campaign_id = c.campaign_id
+     WHERE c.moderation_status = 'pending_review'
+     ORDER BY c.created_at DESC`
+  );
+
+  return result.rows;
+};
+
+export const reviewComment = async (
+  commentId: string,
+  decision: ModerationStatus,
+  reason?: string
+) => {
+  const normalizedDecision: ModerationStatus = decision === 'rejected' ? 'rejected' : 'approved';
+  const defaultReason = normalizedDecision === 'approved' ? 'Approved by admin moderation' : 'Rejected by admin moderation';
+
+  const result = await pool.query(
+    `UPDATE comments
+     SET moderation_status = $1,
+         moderation_reason = COALESCE($2, moderation_reason, $3),
+         moderated_at = NOW()
+     WHERE comment_id = $4
+     RETURNING comment_id, content, user_id, campaign_id, moderation_status, moderation_reason, moderation_score, moderated_at, created_at`,
+    [normalizedDecision, reason ?? null, defaultReason, commentId]
+  );
+
+  return result.rows[0] || null;
 };

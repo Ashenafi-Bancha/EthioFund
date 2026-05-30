@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { CheckCircle, XCircle, Clock, Eye, Users, FileText, Loader } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAdminStats, usePendingCampaigns, usePendingWithdrawals, useApproveCampaign, useRejectCampaign } from '../hooks/useAdmin';
+import {
+  useAdminStats,
+  usePendingCampaigns,
+  usePendingWithdrawals,
+  useApproveCampaign,
+  useRejectCampaign,
+  usePendingComments,
+  useReviewComment,
+} from '../hooks/useAdmin';
 import { useAuth } from '../context/AuthContext';
 
 interface AdminDashboardProps {
@@ -13,9 +21,11 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
   const { stats, loading: statsLoading } = useAdminStats();
   const { campaigns: pendingCampaigns, loading: campaignsLoading } = usePendingCampaigns();
   const { withdrawals: pendingWithdrawals, loading: withdrawalsLoading } = usePendingWithdrawals();
+  const { comments: pendingComments, loading: commentsLoading } = usePendingComments();
   const { approveCampaign, loading: approvingCampaign } = useApproveCampaign();
   const { rejectCampaign, loading: rejectingCampaign } = useRejectCampaign();
-  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'withdrawals'>('overview');
+  const { reviewComment, loading: reviewingComment } = useReviewComment();
+  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'withdrawals' | 'comments'>('overview');
 
   if (!user || user.role !== 'admin') {
     return null;
@@ -36,6 +46,15 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
       toast.success('Campaign rejected.');
     } else {
       toast.error('Failed to reject campaign.');
+    }
+  };
+
+  const handleCommentReview = async (commentId: string, decision: 'approved' | 'rejected') => {
+    const ok = await reviewComment(commentId, decision);
+    if (ok) {
+      toast.success(decision === 'approved' ? 'Comment approved.' : 'Comment rejected.');
+    } else {
+      toast.error('Failed to update comment moderation decision.');
     }
   };
 
@@ -99,6 +118,14 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
               >
                 Withdrawal requests
                 {pendingWithdrawals.length > 0 && <span className="ml-2 rounded-full bg-orange-500 px-2 py-0.5 text-xs text-white">{pendingWithdrawals.length}</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('comments')}
+                className={`px-6 py-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'comments' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-600 hover:text-gray-900'}`}
+              >
+                Comment moderation
+                {pendingComments.length > 0 && <span className="ml-2 rounded-full bg-orange-500 px-2 py-0.5 text-xs text-white">{pendingComments.length}</span>}
               </button>
             </div>
           </div>
@@ -222,6 +249,75 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
                       ) : (
                         <tr>
                           <td colSpan={5} className="px-6 py-10 text-center text-gray-500">No pending withdrawals.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'comments' && (
+              <div>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Pending comment reviews</h2>
+                  {commentsLoading && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Loader className="h-4 w-4 animate-spin" />
+                      Loading comments...
+                    </div>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Campaign</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">User</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Comment</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Reason</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {pendingComments.length > 0 ? (
+                        pendingComments.map((comment) => (
+                          <tr key={comment.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 font-semibold text-gray-900">{comment.campaign_title}</td>
+                            <td className="px-6 py-4 text-gray-700">{comment.user_name}</td>
+                            <td className="px-6 py-4 text-gray-700">
+                              <p className="max-w-md whitespace-pre-wrap break-words">{comment.message}</p>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600">{comment.moderation_reason}</td>
+                            <td className="px-6 py-4 text-gray-700">{new Date(comment.created_at).toLocaleDateString()}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCommentReview(comment.id, 'approved')}
+                                  disabled={reviewingComment}
+                                  className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50 disabled:opacity-50"
+                                  title="Approve"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCommentReview(comment.id, 'rejected')}
+                                  disabled={reviewingComment}
+                                  className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                                  title="Reject"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-10 text-center text-gray-500">No pending comments for review.</td>
                         </tr>
                       )}
                     </tbody>

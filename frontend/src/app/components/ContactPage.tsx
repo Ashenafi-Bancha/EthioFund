@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ArrowRight, Mail, MapPin, Phone, ShieldCheck, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiRequest } from '../lib/api';
 
 interface ContactPageProps {
   onNavigate: (page: string) => void;
@@ -21,8 +22,12 @@ export function ContactPage({ onNavigate }: ContactPageProps) {
 
     setSubmitting(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      toast.success('Your message has been received. We will contact you soon.');
+      const response = await apiRequest<{ success?: boolean; message?: string }>('/contact', {
+        method: 'POST',
+        body: JSON.stringify({ name, email, message }),
+      });
+
+      toast.success(response.message || 'Your message has been received. We will contact you soon.');
       setName('');
       setEmail('');
       setMessage('');
@@ -96,15 +101,15 @@ export function ContactPage({ onNavigate }: ContactPageProps) {
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Full name</label>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Full name <span className="text-red-500">*</span></label>
               <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100" />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Email</label>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Email <span className="text-red-500">*</span></label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100" />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Message</label>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Message <span className="text-red-500">*</span></label>
               <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={6} className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none transition focus:border-green-500 focus:ring-4 focus:ring-green-100" />
             </div>
 

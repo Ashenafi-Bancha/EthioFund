@@ -2,6 +2,7 @@ import axios from 'axios';
 import { randomBytes } from 'crypto';
 import env from '../../config/env';
 import pool from '../../config/db';
+import * as donationsService from '../donations/donations.service';
 
 type ChapaInitializeApiResponse = {
   status?: string;
@@ -48,10 +49,25 @@ type VerifyOutcome = {
 const chapaClient = axios.create({
   baseURL: env.CHAPA_BASE_URL,
   headers: {
-    Authorization: `Bearer ${env.CHAPA_SECRET_KEY}`,
+    Authorization: `Bearer ${env.CHAPA_SECRET_KEY || ''}`,
     'Content-Type': 'application/json',
   },
 });
+
+const isMockPaymentMode = () => {
+  if (env.PAYMENT_MODE === 'mock') {
+    return true;
+  }
+
+  if (env.PAYMENT_MODE === 'real') {
+    return false;
+  }
+
+  return env.CHAPA_SECRET_KEY?.startsWith('CHASECK_TEST-') ?? true;
+};
+
+const buildMockCheckoutUrl = (txRef: string) =>
+  `${env.CLIENT_URL.replace(/\/$/, '')}/payment-success?tx_ref=${encodeURIComponent(txRef)}&mode=mock`;
 
 const getDonationContext = async (donationId: string): Promise<DonationContext | null> => {
   const result = await pool.query<DonationContext>(
@@ -120,11 +136,7 @@ export const initializeDonationPayment = async (
     throw error;
   }
 
-  if (String(donation.donor_id) !== donorId) {
-    const error = new Error('Not authorized to initialize this payment');
-    (error as Error & { statusCode?: number }).statusCode = 403;
-    throw error;
-  }
+  const mockMode = isMockPaymentMode();
 
   if (donation.payment_status === 'successful') {
     const error = new Error('Donation has already been paid');
@@ -136,6 +148,30 @@ export const initializeDonationPayment = async (
   const firstName = String(override?.firstName || donation.full_name?.split(' ')[0] || 'Donor').trim();
   const lastName = String(override?.lastName || donation.full_name?.split(' ').slice(1).join(' ') || 'User').trim();
   const email = String(override?.email || donation.email || '').trim();
+
+  if (mockMode) {
+    await pool.query(
+      `INSERT INTO payments (tx_ref, donation_id, campaign_id, donor_name, email, amount, status, payment_method)
+       VALUES ($1, $2, $3, $4, $5, $6, 'success', 'mock-chapa')`,
+      [txRef, donationId, donation.campaign_id, `${firstName} ${lastName}`.trim(), email || 'test@ethiofund.local', donation.amount]
+    );
+
+    await pool.query(
+      `INSERT INTO transactions (transaction_id, donation_id, gateway_name, transaction_status)
+       VALUES ($1, $2, 'mock-chapa', 'successful')
+       ON CONFLICT (transaction_id) DO NOTHING`,
+      [txRef, donationId]
+    );
+
+    await donationsService.markDonationSuccessful(String(donationId));
+
+    console.info(`[payments] mock checkout initialized tx_ref=${txRef} donation_id=${donationId}`);
+
+    return {
+      txRef,
+      checkoutUrl: buildMockCheckoutUrl(txRef),
+    };
+  }
 
   if (!email) {
     const error = new Error('Donor email is required for payment initialization');
@@ -167,7 +203,7 @@ export const initializeDonationPayment = async (
       callback_url: `${env.SERVER_URL}/api/payments/webhook/chapa`,
       return_url: `${env.SERVER_URL}/api/payments/verify?tx_ref=${encodeURIComponent(txRef)}`,
       customization: {
-        title: 'EthioFund Donation',
+        title: 'EthioFund Donate',
         description: donation.campaign_title || 'Campaign donation',
       },
     });
@@ -189,7 +225,8 @@ export const initializeDonationPayment = async (
     await pool.query('UPDATE transactions SET transaction_status = $1 WHERE transaction_id = $2', ['failed', txRef]);
 
     const message = error instanceof Error ? error.message : 'Chapa initialize request failed';
-    console.error(`[payments] initialize failed tx_ref=${txRef}: ${message}`);
+    const details = axios.isAxiosError(error) ? JSON.stringify(error.response?.data ?? {}, null, 2) : '';
+    console.error(`[payments] initialize failed tx_ref=${txRef}: ${message}${details ? ` | response=${details}` : ''}`);
     const appError = new Error(`Unable to initialize Chapa payment: ${message}`);
     (appError as Error & { statusCode?: number }).statusCode = 502;
     throw appError;

@@ -1,6 +1,7 @@
 import { User } from '../App';
 import { Menu, X, UserCircle, Heart, ArrowRight } from 'lucide-react';
 import { useState } from 'react';
+import logo from '../../assets/ethiofund_logo.png';
 
 interface NavigationProps {
   currentUser: User | null;
@@ -27,6 +28,11 @@ export function Navigation({ currentUser, onNavigate, onLogout, currentPage }: N
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-18 items-center justify-between">
           <button type="button" onClick={() => onNavigate('home')} className="flex items-center gap-3 text-left">
+            <img
+              src={logo}
+              alt="EthioFund logo"
+              className="h-11 w-11 rounded-full border border-gray-200 object-cover shadow-sm"
+            />
             <div>
               <div className="text-2xl font-black tracking-tight text-gray-900">EthioFund</div>
               <div className="hidden sm:block text-xs font-medium uppercase tracking-[0.18em] text-gray-500">Crowdfunding for Ethiopia</div>

@@ -1,411 +1,269 @@
-# 🌍 EthioFund - Crowdfunding Platform for Ethiopia
+# EthioFund
 
-> A PERN Stack web-based crowdfunding platform enabling Ethiopians to raise funds for medical, educational, funeral, emergency, and community initiatives with secure Chapa payment gateway integration.
+EthioFund is a full-stack crowdfunding platform for Ethiopia with React, TypeScript, Express, and PostgreSQL.
 
----
+This repository is set up as a zero-setup, one-command full stack workflow with Docker, while still keeping a local non-Docker path for developers who want it.
 
-## 📋 Table of Contents
+## Quick Start
 
-- [Project Overview](#-project-overview)
-- [Technology Stack](#-technology-stack)
-- [Project Structure](#-project-structure)
-- [Getting Started](#-getting-started)
-- [Features](#-features)
-- [Testing the Platform](#-testing-the-platform)
-- [Troubleshooting](#-troubleshooting)
+### Option 1: Zero-setup Docker workflow
 
----
+This is the recommended path for teams and new contributors. It is the default zero-setup, one-command full stack setup.
 
-## 🎯 Project Overview
-
-**EthioFund** is a full-stack crowdfunding platform for the Ethiopian community with different user roles:
-
-- **Donors:** Browse campaigns, donate securely via Chapa, track donation history
-- **Organizers:** Create campaigns, post updates, request fund withdrawals
-- **Admins:** Manage campaigns, verify withdrawals, monitor activity, generate reports
-- **Guests:** View campaigns and share on social media
-
-### Key Features
-
-✅ JWT authentication (7-day expiry)  
-✅ Role-based access control (donor, organizer, admin)  
-✅ Campaign management (create, approve, reject, suspend)  
-✅ Chapa payment gateway integration  
-✅ AI-powered comment moderation (Gemini)  
-✅ Activity logging & audit trail  
-✅ Campaign updates & withdrawal requests  
-✅ Platform analytics & reporting  
-
----
-
-## 🛠️ Technology Stack
-
-### **Frontend**
-- React + TypeScript
-- Vite (build tool)
-- Tailwind CSS 4.1.12 (styling)
-- Shadcn/ui + Radix UI (components)
-- React Router (routing)
-- Axios (HTTP client)
-- React Context API (state management)
-
-### **Backend**
-- Node.js 16+ + Express.js 5.2.1
-- TypeScript
-- PostgreSQL 18 (database)
-- JWT authentication
-- bcryptjs (password hashing)
-- express-validator (input validation)
-- Helmet (security headers)
-- morgan (logging)
-
-### **Payment & Integrations**
-- Chapa (Ethiopian payment provider)
-- Gemini AI (comment moderation)
-- Cloudflare Tunnel (webhook testing)
-
-### **Package Manager**
-- pnpm (for both frontend and backend)
-
----
-
-## 📁 Project Structure
-
-```
-ethiofund/
-├── 📂 backend/                           # Node.js Express API
-│   ├── 📄 package.json                   # Backend dependencies
-│   ├── 📄 tsconfig.json                  # TypeScript configuration
-│   ├── 📄 eslint.config.mjs              # ESLint configuration
-│   ├── 📄 .env                           # Environment variables 
-│   ├── 📄 .env.example                   # Environment template
-│   │
-│   ├── 📂 src/
-│   │   ├── 📄 server.ts                  # Express server entry point
-│   │   ├── 📄 app.ts                     # Express app setup
-│   │   │
-│   │   ├── 📂 config/
-│   │   │   ├── 📄 db.ts                  # PostgreSQL connection pool
-│   │   │   └── 📄 env.ts                 # Environment variables
-│   │   │
-│   │   ├── 📂 middleware/
-│   │   │   ├── 📄 auth.ts                # JWT verification
-│   │   │   ├── 📄 authorize.ts           # Role-based access control
-│   │   │   ├── 📄 errorHandler.ts        # Global error handler
-│   │   │   └── 📄 activityLogger.ts      # Activity logging
-│   │   │
-│   │   ├── 📂 modules/                   # Feature modules 
-│   │   │   ├── auth/
-│   │   │   │   ├── auth.routes.ts
-│   │   │   │   ├── auth.controller.ts
-│   │   │   │   └── auth.service.ts
-│   │   │   ├── campaigns/
-│   │   │   │   ├── campaigns.routes.ts
-│   │   │   │   ├── campaigns.controller.ts
-│   │   │   │   └── campaigns.service.ts
-│   │   │   ├── donations/
-│   │   │   ├── payments/
-│   │   │   ├── comments/
-│   │   │   ├── withdrawals/
-│   │   │   ├── admin/
-│   │   │   ├── reports/
-│   │   │   └── users/
-│   │   │
-│   │   ├── 📂 types/
-│   │   │   └── 📄 express.d.ts           # Express type augmentation
-│   │   │
-│   │   └── 📂 utils/
-│   │       └── 📄 validators.ts          # Shared validators
-│   │
-│   └── 📂 database/
-│       ├── 📄 schema.sql                 # Database table definitions
-│       └── 📄 seed.sql                   # Test data
-│
-├── 📂 frontend/                          # React + Vite application
-│   ├── 📄 package.json                   # Frontend dependencies
-│   ├── 📄 vite.config.ts                 # Vite configuration
-│   ├── 📄 tailwind.config.ts             # Tailwind CSS config
-│   ├── 📄 postcss.config.mjs             # PostCSS configuration
-│   ├── 📄 index.html                     # HTML entry point
-│   │
-│   └── 📂 src/
-│       ├── 📄 main.tsx                   # React app entry point
-│       ├── 📂 app/
-│       │   ├── 📄 App.tsx                # Main app component
-│       │   ├── 📂 components/            # React components (40+)
-│       │   │   ├── Home.tsx
-│       │   │   ├── CampaignListing.tsx
-│       │   │   ├── CampaignDetail.tsx
-│       │   │   ├── AuthPage.tsx
-│       │   │   ├── DonateModal.tsx
-│       │   │   ├── EnhancedDonateModal.tsx
-│       │   │   ├── PaymentSuccess.tsx    # Chapa callback
-│       │   │   ├── PaymentFailed.tsx     # Chapa callback
-│       │   │   ├── DonorDashboard.tsx
-│       │   │   ├── OrganizerDashboard.tsx
-│       │   │   ├── AdminDashboard.tsx
-│       │   │   ├── CreateCampaign.tsx
-│       │   │   ├── WithdrawalRequest.tsx
-│       │   │   ├── Navigation.tsx
-│       │   │   ├── Footer.tsx
-│       │   │   └── ... (UI components)
-│       │   │
-│       │   ├── 📂 context/
-│       │   │   └── 📄 AuthContext.tsx    # Authentication context & hooks
-│       │   │
-│       │   ├── 📂 hooks/
-│       │   │   ├── 📄 useCampaigns.ts
-│       │   │   ├── 📄 useDonations.ts
-│       │   │   ├── 📄 useComments.ts
-│       │   │   └── ... (custom hooks)
-│       │   │
-│       │   ├── 📂 lib/
-│       │   │   └── 📄 api.ts            # Axios instance & API calls
-│       │   │
-│       │   ├── 📂 types/
-│       │   │   └── 📄 auth.ts           # TypeScript types
-│       │   │
-│       │   └── 📂 styles/
-│       │       ├── 📄 globals.css
-│       │       ├── 📄 index.css
-│       │       └── 📄 default_theme.css
-```     │
-        └──README.md
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-Ensure you have the following installed:
-- **Node.js** 16+ 
-- **PostgreSQL** 12+ (recommended: version 18)
-- **pnpm** 8+ (or npm)
-- **Git**
-- **Cloudflare Tunnel** (optional, for Chapa webhook testing)
-
-### Installation
-
-1. **Clone the repository:**
 ```bash
-git clone <repository-url>
+git clone <repo>
 cd ethiofund
+docker compose up
 ```
 
-2. **Setup Backend:**
+That starts:
+
+- PostgreSQL with persistent storage
+- Backend API with automatic database wait, migration, and seed bootstrap
+- Frontend dev server with hot reload
+- pgAdmin for visual database access
+
+Open these URLs after startup:
+
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:5000
+- Backend health check: http://localhost:5000/health
+- pgAdmin: http://localhost:8080
+- PostgreSQL: localhost:5432
+
+If you want to rebuild images after code changes, use:
+
 ```bash
-cd backend
+docker compose up --build
+```
+
+### Option 2: Run locally without Docker
+
+Use this if you want to work directly on your machine.
+
+Prerequisites:
+
+- Node.js 20+
+- pnpm
+- PostgreSQL 18 or compatible
+- Git
+
+Clone the repository and install dependencies:
+
+```bash
+git clone <repo>
+cd ethiofund/backend
 pnpm install
-cp .env.example .env
-# Update .env with your database credentials and Chapa API keys
-```
-
-3. **Setup Frontend:**
-```bash
 cd ../frontend
 pnpm install
 ```
 
-4. **Setup Database:**
+Set up environment files:
+
 ```bash
-# Create database and run schema
+copy ..\.env.example ..\.env
+copy .env.example .env
+```
+
+If you are using PowerShell, you can also run:
+
+```powershell
+Copy-Item ..\.env.example ..\.env
+Copy-Item .env.example .env
+```
+
+Create the database if it does not already exist:
+
+```bash
+createdb -U postgres ethiofund_db
+```
+
+If you prefer `psql`, you can use:
+
+```bash
 psql -U postgres
 CREATE DATABASE ethiofund_db;
-# Import schema and seed data
-psql -U postgres -d ethiofund_db -f ../backend/database/schema.sql
-psql -U postgres -d ethiofund_db -f ../backend/database/seed.sql
+\q
 ```
 
-5. **Run the Application:**
+Then run the backend bootstrap steps manually:
+
 ```bash
-# Terminal 1: Backend (from backend directory)
-pnpm dev
-
-# Terminal 2: Frontend (from frontend directory)
-pnpm dev
-
-# Terminal 3: Cloudflare Tunnel (for payment webhook testing)
-cloudflared tunnel --url http://localhost:5000
-```
-
-Access the frontend at `http://localhost:5173`
-
----
-
-## 🎨 Features
-
-### **Donor Features**
-- Browse and search campaigns
-- Donate securely via Chapa
-- View donation history & receipts
-- Leave comments on campaigns
-- Share campaigns on social media
-- Receive real-time campaign updates
-
-### **Organizer Features**
-- Create and manage campaigns
-- Upload campaign images/videos
-- Post updates to donors
-- Track donation progress
-- Request fund withdrawals
-- Respond to comments
-
-### **Admin Features**
-- View platform dashboard & statistics
-- Approve/reject/suspend campaigns
-- Manage user accounts
-- Review and approve withdrawals
-- Generate reports (campaigns, donations, users, finances)
-- View activity logs
-
-### **Additional Features**
-- AI-powered comment moderation (Gemini)
-- Secure payment processing with idempotent verification
-- Comprehensive audit logging
-
----
-
-## 🧪 Testing the Platform
-
-### Default Test Users
-After running the seed data, use these credentials:
-
-| Email | Password | Role |
-|-------|----------|------|
-| admin@ethiofund.com | Admin@1234 | Admin |
-| organizer1@email.com | Organizer@1234 | Organizer |
-| donor1@email.com | Donor@1234 | Donor |
-
-### Testing Chapa Payments
-1. Login as a donor
-2. Open any campaign
-3. Click "Donate Now" button
-4. Fill the donation form
-5. Use test card: `5200828282828282`
-6. Use any future expiry date
-7. Use any 3-digit CVC
-8. Complete the payment
-
-### API Testing Example
-Use REST Client or Postman to test endpoints:
-
-```http
-# Register new user
-POST http://localhost:5000/api/auth/register
-Content-Type: application/json
-
-{
-  "full_name": "Test User",
-  "email": "test@example.com",
-  "phone_number": "0901234567",
-  "password": "Password@1234",
-  "role": "donor"
-}
-```
-
-```http
-# Create campaign (requires auth token)
-POST http://localhost:5000/api/campaigns
-Content-Type: application/json
-Authorization: Bearer {JWT_TOKEN}
-
-{
-  "title": "Medical Campaign",
-  "description": "Help with surgery costs",
-  "goal_amount": 50000,
-  "category": "medical"
-}
-```
-
----
-
-## 🔐 Security
-
-- Password hashing with bcryptjs (12 salt rounds)
-- JWT authentication with 7-day expiry
-- Role-based access control (RBAC)
-- Input validation on all endpoints
-- Security headers with Helmet
-- CORS configured for frontend only
-- Database constraints and cascading deletes
-- Secrets stored in environment variables
-- Activity logging for audit trails
-- Idempotent payment verification
-
----
-
-## 🐛 Troubleshooting
-
-### Backend Won't Start
-```bash
-# Verify Node.js and pnpm are installed
-node --version
-pnpm --version
-
-# Reinstall dependencies
-pnpm install
-
-# Check if port 5000 is available
-netstat -ano | findstr :5000
-```
-
-### PostgreSQL Connection Error
-- Verify PostgreSQL is running
-- Check database name and credentials in `.env`
-- Ensure database user has correct permissions
-- Confirm schema and seed data are imported
-
-### Frontend Can't Connect to Backend
-- Verify backend is running on port 5000
-- Check CORS configuration in backend
-- Clear browser cache and restart frontend dev server
-
-### Chapa Payment Issues
-- Verify Cloudflare Tunnel is running
-- Update webhook URL in Chapa dashboard
-- Check SERVER_URL in `.env` matches tunnel URL
-- Ensure test mode is enabled in Chapa
-
-### Clear Build Cache
-```bash
-# Frontend
-cd frontend
-rm -r dist node_modules
-pnpm install
-
-# Backend
 cd backend
-rm -r dist node_modules
-pnpm install
+pnpm db:migrate
+pnpm db:seed
+pnpm dev
 ```
 
----
+In a second terminal:
 
-## 📝 Git Workflow
+```bash
+cd frontend
+pnpm dev
+```
 
-1. Clone repository: `git clone <repository-url>`
-2. Create feature branch: `git checkout -b feature/your-feature`
-3. Make changes and commit with clear messages
-4. Push to remote: `git push origin feature/your-feature`
-5. Create pull request with description
-6. Address code review feedback
-7. Merge after approval
+Local URLs:
 
-## 💻 Development Guidelines
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:5000
+- Backend health check: http://localhost:5000/health
 
-- Use TypeScript for type safety
-- Follow ESLint configuration
-- Write descriptive variable and function names
-- Add comments for complex logic
-- Keep functions small and focused
-- Test features before creating PR
+## What starts automatically in Docker
 
----
+- Frontend dev server with hot reload
+- Backend API with hot reload
+- PostgreSQL with persistent Docker volume
+- Database readiness check before backend start
+- Schema creation
+- Demo data seeding
+- pgAdmin with default login
+- Backend health endpoint
 
-## 📄 License
+## Health Endpoint
 
-This project is confidential and intended for evaluation only.
+The backend exposes `GET /health` and returns:
 
+```json
+{
+  "status": "OK",
+  "database": "Connected"
+}
+```
 
+`GET /api/health` is also kept for compatibility.
 
+## Demo Data
+
+The bootstrap seed creates sample users, campaigns, donations, comments, milestones, and admin data so the UI is usable immediately after startup.
+
+Demo accounts:
+
+- Admin: `admin@ethiofund.com` / `Admin@123`
+- Organizer: `organizer@ethiofund.com` / `Organizer@123`
+- Donor 1: `donor1@ethiofund.com` / `Donor@123`
+- Donor 2: `donor2@ethiofund.com` / `Donor@123`
+
+## pgAdmin
+
+Default login:
+
+- Email: `admin@ethiofund.local`
+- Password: `pgadmin123`
+
+The pgAdmin connection is preconfigured to point at the Docker PostgreSQL service named `db`.
+
+## Environment Files
+
+- `.env.example` at the repo root contains Docker-friendly defaults.
+- `backend/.env.example` contains host-development defaults for the API.
+- `frontend/.env.example` contains the frontend API URL example.
+
+For Docker, the defaults are intentionally safe and beginner-friendly. The stack runs in mock payment mode by default so it does not require real Chapa credentials just to boot.
+
+## Project Structure
+
+```text
+ethiofund/
+├── backend/
+│   ├── Dockerfile
+│   ├── Dockerfile.dockerignore
+│   ├── database/
+│   │   ├── schema.sql
+│   │   └── seed.sql
+│   ├── package.json
+│   ├── pnpm-lock.yaml
+│   ├── tsconfig.json
+│   └── src/
+│       ├── app.ts
+│       ├── server.ts
+│       ├── config/
+│       │   ├── db.ts
+│       │   └── env.ts
+│       ├── middleware/
+│       │   ├── activityLogger.ts
+│       │   ├── auth.ts
+│       │   ├── authorize.ts
+│       │   └── errorHandler.ts
+│       ├── modules/
+│       │   ├── admin/
+│       │   ├── auth/
+│       │   ├── campaigns/
+│       │   ├── comments/
+│       │   ├── contact/
+│       │   ├── donations/
+│       │   ├── payments/
+│       │   ├── reports/
+│       │   ├── users/
+│       │   └── withdrawals/
+│       ├── scripts/
+│       │   ├── bootstrap.ts
+│       │   ├── migrate.ts
+│       │   ├── seed.ts
+│       │   └── start.ts
+│       ├── types/
+│       │   └── express.d.ts
+│       └── uploads/
+├── frontend/
+│   ├── Dockerfile
+│   ├── Dockerfile.dockerignore
+│   ├── index.html
+│   ├── nginx.conf
+│   ├── package.json
+│   ├── pnpm-lock.yaml
+│   ├── pnpm-workspace.yaml
+│   ├── postcss.config.mjs
+│   ├── tsconfig.json
+│   ├── vite.config.ts
+│   └── src/
+│       ├── main.tsx
+│       ├── app/
+│       │   ├── App.tsx
+│       │   ├── components/
+│       │   ├── context/
+│       │   ├── data/
+│       │   ├── hooks/
+│       │   ├── lib/
+│       │   ├── types/
+│       │   └── styles/
+│       └── assets/
+├── docker/
+│   └── pgadmin-servers.json
+├── docker-compose.yml
+├── api-tests.http
+├── README.md
+└── .env.example
+```
+
+## Key Features
+
+- JWT authentication with role-based access control
+- Donor, organizer, and admin flows
+- Campaign creation, moderation, and verification
+- Donation tracking and payment integration
+- Activity logging and reporting
+- Comment moderation
+- Campaign updates and withdrawal management
+- PostgreSQL-backed persistence
+
+## Docker Notes
+
+- The backend waits for PostgreSQL before bootstrapping.
+- Schema and seed data are applied automatically.
+- PostgreSQL data is stored in a named Docker volume.
+- Frontend and backend both run with hot reload in the Docker setup.
+- The frontend binds to `0.0.0.0` so it is reachable from the host browser.
+
+## Troubleshooting
+
+- If a port is already in use, stop the conflicting process or change the published port in `docker-compose.yml`.
+- If you want a completely fresh database, run `docker compose down -v` and then `docker compose up` again.
+- If the backend is still starting, check `docker compose logs -f backend` and `docker compose logs -f db`.
+- If pgAdmin opens but cannot reach PostgreSQL, confirm the server host is `db`, not `localhost`.
+- On Windows, Docker Desktop file sharing must allow the repository folder so bind mounts work correctly.
+- If hot reload feels slow on Docker Desktop, restart the stack once after the first successful install so the mounted `node_modules` volume is populated.
+
+## Notes
+
+- The backend keeps `/api/health` for compatibility.
+- The Docker workflow is designed to behave consistently on Windows, Linux, and macOS.
+- The local workflow remains available for contributors who want to run the frontend and backend directly on their machine.

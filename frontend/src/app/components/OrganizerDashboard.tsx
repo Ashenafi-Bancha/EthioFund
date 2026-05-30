@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Plus, TrendingUp, Users, DollarSign, Eye, Edit, Clock, Loader } from 'lucide-react';
+import { Plus, TrendingUp, Users, DollarSign, Eye, Edit, Clock, Loader, Image as ImageIcon } from 'lucide-react';
 import { useUserCampaigns } from '../hooks/useCampaigns';
 import { useUserWithdrawals } from '../hooks/useWithdrawals';
 import { useAuth } from '../context/AuthContext';
@@ -91,10 +91,17 @@ export function OrganizerDashboard({ onNavigate, onViewCampaign }: OrganizerDash
                       <tr key={campaign.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <img src={campaign.image_url} alt={campaign.title} className="h-12 w-12 rounded-xl object-cover" />
+                            {campaign.status === 'pending' ? (
+                              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-400" title="Image will be visible after approval">
+                                <ImageIcon className="h-5 w-5" />
+                              </div>
+                            ) : (
+                              <img src={campaign.image_url} alt={campaign.title} className="h-12 w-12 rounded-xl object-cover" />
+                            )}
                             <div>
                               <div className="font-semibold text-gray-900">{campaign.title}</div>
                               <div className="text-sm text-gray-500">{campaign.category}</div>
+                              {campaign.status === 'pending' && <div className="text-xs text-gray-400">Image visible after approval</div>}
                             </div>
                           </div>
                         </td>

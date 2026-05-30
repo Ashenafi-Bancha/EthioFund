@@ -92,7 +92,7 @@ export function WithdrawalRequest({ onNavigate }: WithdrawalRequestProps) {
         ) : eligibleCampaigns.length > 0 ? (
           <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl bg-white p-6 shadow-md">
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Select campaign *</label>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Select campaign <span className="text-red-500">*</span></label>
               <select
                 value={selectedCampaign}
                 onChange={(e) => setSelectedCampaign(e.target.value)}
@@ -130,7 +130,7 @@ export function WithdrawalRequest({ onNavigate }: WithdrawalRequestProps) {
             )}
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Withdrawal amount (ETB) *</label>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Withdrawal amount (ETB) <span className="text-red-500">*</span></label>
               <div className="relative">
                 <DollarSign className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                 <input
@@ -147,7 +147,7 @@ export function WithdrawalRequest({ onNavigate }: WithdrawalRequestProps) {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Bank account number *</label>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Bank account number <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 value={bankAccount}
@@ -159,7 +159,7 @@ export function WithdrawalRequest({ onNavigate }: WithdrawalRequestProps) {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-700">Reason for withdrawal *</label>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Reason for withdrawal <span className="text-red-500">*</span></label>
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -187,7 +187,7 @@ export function WithdrawalRequest({ onNavigate }: WithdrawalRequestProps) {
             )}
 
             <div className="flex flex-col gap-4 pt-2 sm:flex-row">
-              <button type="button" onClick={() => onNavigate('organizer-dashboard')} className="flex-1 rounded-2xl bg-gray-100 px-6 py-3 font-semibold text-gray-700 transition-colors hover:bg-gray-200">
+              <button type="button" onClick={() => onNavigate('organizer-dashboard')} className="flex-1 rounded-2xl bg-red-50 px-6 py-3 font-semibold text-red-700 transition-colors hover:bg-red-100">
                 Cancel
               </button>
               <button

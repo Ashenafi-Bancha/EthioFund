@@ -223,7 +223,7 @@ export function CampaignListing({ onViewCampaign }: CampaignListingProps) {
               <Search className="w-16 h-16 mx-auto" />
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No campaigns found</h3>
-            <p className="text-gray-600 mb-4">Try adjusting your filters or search query</p>
+            <p className="text-gray-600 mb-4">Try again with a different search.</p>
             <button
               onClick={() => {
                 setSearchQuery('');
@@ -232,7 +232,7 @@ export function CampaignListing({ onViewCampaign }: CampaignListingProps) {
               }}
               className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all"
             >
-              Reset Filters
+              Reset
             </button>
           </div>
         )}

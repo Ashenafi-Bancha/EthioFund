@@ -18,6 +18,7 @@ export type CampaignInput = {
   category: string;
   duration_days?: number;
   image_url?: string;
+  supporting_documents?: string[];
   verified?: boolean;
 };
 
@@ -47,6 +48,7 @@ type CampaignRow = {
   raised_amount: string;
   duration_days?: number;
   image_url?: string | null;
+  supporting_documents?: string[] | string | null;
   verified?: boolean;
   status: CampaignStatus;
   category: string;
@@ -60,6 +62,41 @@ type CampaignRow = {
 };
 
 type ServiceError = Error & { statusCode?: number };
+
+const normalizeDocuments = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value
+      .map((document) => {
+        if (typeof document === 'string') {
+          return document.trim();
+        }
+
+        if (document && typeof document === 'object' && 'url' in document) {
+          return String((document as { url?: unknown }).url ?? '').trim();
+        }
+
+        return '';
+      })
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+
+      if (Array.isArray(parsed)) {
+        return normalizeDocuments(parsed);
+      }
+    } catch {
+      return [value.trim()];
+    }
+  }
+
+  return [];
+};
+
+const normalizeUploadedDocumentUrls = (value: string[] | undefined): string[] =>
+  (value ?? []).map((document) => String(document).trim()).filter(Boolean);
 
 const buildCampaignSelect = () => `
   SELECT c.*,
@@ -83,21 +120,48 @@ const buildCampaignSelect = () => `
   LEFT JOIN users u ON u.user_id = c.organizer_id
 `;
 
-export const createCampaign = async (organizerId: string, input: CampaignInput): Promise<CampaignRow> => {
+export const createCampaign = async (
+  organizerId: string,
+  input: CampaignInput,
+  uploadedImageUrl?: string,
+  uploadedDocumentUrls: string[] = []
+): Promise<CampaignRow> => {
+  const title = typeof input.title === 'string' ? input.title.trim() : '';
+  const description = typeof input.description === 'string' ? input.description.trim() : '';
+  const story = typeof input.story === 'string' ? input.story.trim() : null;
+  const location = typeof input.location === 'string' && input.location.trim() ? input.location.trim() : 'Ethiopia';
+  const category = typeof input.category === 'string' ? input.category.trim() : '';
+  const goalAmount = Number(input.goal_amount);
+  const durationDays = input.duration_days ? Number(input.duration_days) : 30;
+  const imageUrl =
+    (typeof uploadedImageUrl === 'string' && uploadedImageUrl.length > 0 && uploadedImageUrl.length <= 255
+      ? uploadedImageUrl
+      : typeof input.image_url === 'string' && input.image_url.length > 0 && input.image_url.length <= 255
+        ? input.image_url
+        : null);
+  const supportingDocuments = [...normalizeDocuments(input.supporting_documents), ...normalizeUploadedDocumentUrls(uploadedDocumentUrls)];
+
+  if (!title || !description || !category || !Number.isFinite(goalAmount) || goalAmount <= 0) {
+    const error: ServiceError = new Error('Invalid campaign payload');
+    error.statusCode = 400;
+    throw error;
+  }
+
   const result = await pool.query<CampaignRow>(
-    `INSERT INTO campaigns (title, description, story, location, goal_amount, raised_amount, duration_days, image_url, verified, status, category, organizer_id)
-     VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, 'pending', $9, $10)
+    `INSERT INTO campaigns (title, description, story, location, goal_amount, raised_amount, duration_days, image_url, supporting_documents, verified, status, category, organizer_id)
+     VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8::jsonb, $9, 'pending', $10, $11)
      RETURNING *`,
     [
-      input.title,
-      input.description,
-      input.story ?? null,
-      input.location ?? 'Ethiopia',
-      input.goal_amount,
-      input.duration_days ?? 30,
-      input.image_url ?? null,
+      title,
+      description,
+      story,
+      location,
+      goalAmount,
+      durationDays,
+      imageUrl,
+      JSON.stringify(supportingDocuments),
       input.verified ?? false,
-      input.category,
+      category,
       organizerId,
     ]
   );
@@ -138,6 +202,19 @@ export const getCampaigns = async (filters: CampaignFilters = {}): Promise<Campa
   `;
 
   const result = await pool.query<CampaignRow>(query, params);
+  return result.rows;
+};
+
+export const getMyCampaigns = async (organizerId: string): Promise<CampaignRow[]> => {
+  const result = await pool.query<CampaignRow>(
+    `
+    ${buildCampaignSelect()}
+    WHERE c.organizer_id = $1
+    ORDER BY c.created_at DESC
+    `,
+    [organizerId]
+  );
+
   return result.rows;
 };
 

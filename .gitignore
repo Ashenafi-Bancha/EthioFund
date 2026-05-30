@@ -21,3 +21,4 @@ backend/uploads/
 **/.vscode/
 .idea/
 **/.idea/
+DOCKER_GUIDE.md

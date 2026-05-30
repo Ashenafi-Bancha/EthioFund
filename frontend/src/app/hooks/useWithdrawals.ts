@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../lib/api';
 
 type WithdrawalApiRow = {
@@ -68,13 +69,23 @@ export const useUserWithdrawals = (): UseWithdrawalsResult => {
   const [withdrawals, setWithdrawals] = useState<WithdrawalResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { token } = useAuth();
 
   useEffect(() => {
     const fetchWithdrawals = async () => {
       try {
+        if (!token) {
+          setWithdrawals([]);
+          setError(null);
+          setLoading(false);
+          return;
+        }
+
         setLoading(true);
         setError(null);
-        const response = await apiRequest<{ success?: boolean; withdrawals?: WithdrawalApiRow[] } | WithdrawalApiRow[]>('/withdrawals/my');
+        const response = await apiRequest<{ success?: boolean; withdrawals?: WithdrawalApiRow[] } | WithdrawalApiRow[]>('/withdrawals/my', {
+          authToken: token,
+        });
         const data = Array.isArray(response) ? response : response.withdrawals ?? [];
         setWithdrawals(data.map(normalizeWithdrawal));
       } catch (err) {
@@ -85,8 +96,8 @@ export const useUserWithdrawals = (): UseWithdrawalsResult => {
       }
     };
 
-    fetchWithdrawals();
-  }, []);
+    void fetchWithdrawals();
+  }, [token]);
 
   return { withdrawals, loading, error };
 };
@@ -97,14 +108,21 @@ export const useUserWithdrawals = (): UseWithdrawalsResult => {
 export const useRequestWithdrawal = (): UseRequestWithdrawalResult => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { token } = useAuth();
 
   const requestWithdrawal = async (data: CreateWithdrawalInput): Promise<WithdrawalResponse | null> => {
     try {
+      if (!token) {
+        setError('Please sign in again to request a withdrawal.');
+        return null;
+      }
+
       setLoading(true);
       setError(null);
       const response = await apiRequest<{ success?: boolean; withdrawal?: WithdrawalApiRow }>('/withdrawals', {
         method: 'POST',
         body: JSON.stringify(data),
+        authToken: token,
       });
       if (!response.withdrawal) {
         return null;

@@ -23,8 +23,10 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
     phoneNumber: ''
   });
 
+  const [campaignImageFile, setCampaignImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<string[]>([]);
+  const [documents, setDocuments] = useState<File[]>([]);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const categories = [
     { value: 'medical', label: 'Medical' },
@@ -37,6 +39,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCampaignImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -48,7 +51,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
   const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      const newDocs = Array.from(files).map(f => f.name);
+      const newDocs = Array.from(files);
       setDocuments([...documents, ...newDocs]);
     }
   };
@@ -56,8 +59,13 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.title || !formData.goalAmount || !formData.description || !formData.story) {
+    if (!formData.title.trim() || !formData.location.trim() || !formData.goalAmount.trim() || !formData.description.trim() || !formData.story.trim() || !formData.bankAccount.trim() || !formData.phoneNumber.trim() || !campaignImageFile) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!agreedToTerms) {
+      toast.error('You must agree to the terms before submitting your campaign');
       return;
     }
 
@@ -73,7 +81,8 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
       location: formData.location,
       goal_amount: parseFloat(formData.goalAmount),
       duration_days: parseInt(formData.duration, 10),
-      image_url: imagePreview || undefined,
+      campaign_image: campaignImageFile,
+      supporting_documents: documents,
     });
 
     if (result) {
@@ -86,6 +95,19 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
 
   if (!currentUser) return null;
 
+  const canSubmit = Boolean(
+    formData.title.trim() &&
+      formData.location.trim() &&
+      formData.goalAmount.trim() &&
+      formData.description.trim() &&
+      formData.story.trim() &&
+      formData.bankAccount.trim() &&
+      formData.phoneNumber.trim() &&
+        campaignImageFile &&
+      agreedToTerms &&
+      parseFloat(formData.goalAmount) > 0
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-4xl mx-auto">
@@ -93,7 +115,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
         <div className="mb-8">
           <button
             onClick={() => onNavigate('organizer-dashboard')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            className="mb-4 flex items-center gap-2 text-gray-600 transition-colors hover:text-gray-900"
           >
             <ArrowLeft className="w-5 h-5" />
             Back to Dashboard
@@ -111,14 +133,14 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Campaign Title *
+                  Campaign Title <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="e.g., Build a School in Rural Oromia"
+                  placeholder="e.g., Ethiopia Emergency Medical Surgery Support for Hana in Addis Ababa"
                   required
                 />
               </div>
@@ -126,7 +148,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Category *
+                    Category <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.category}
@@ -142,7 +164,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Location *
+                    Location <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -158,7 +180,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Funding Goal (ETB) *
+                    Funding Goal (ETB) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -172,7 +194,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
 
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Campaign Duration (days) *
+                    Campaign Duration (days) <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={formData.duration}
@@ -191,7 +213,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Short Description *
+                  Short Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   value={formData.description}
@@ -215,7 +237,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
             
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tell Your Story *
+                Tell Your Story <span className="text-red-500">*</span>
               </label>
               <textarea
                 value={formData.story}
@@ -237,7 +259,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
             
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Upload Campaign Image *
+                Upload Campaign Image <span className="text-red-500">*</span>
               </label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-green-400 transition-colors">
                 {imagePreview ? (
@@ -249,7 +271,10 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
                     />
                     <button
                       type="button"
-                      onClick={() => setImagePreview(null)}
+                      onClick={() => {
+                        setImagePreview(null);
+                        setCampaignImageFile(null);
+                      }}
                       className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                     >
                       Remove Image
@@ -311,7 +336,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
                     {documents.map((doc, index) => (
                       <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
                         <FileText className="w-5 h-5 text-gray-600" />
-                        <span className="text-sm text-gray-700">{doc}</span>
+                        <span className="text-sm text-gray-700">{doc.name}</span>
                         <button
                           type="button"
                           onClick={() => setDocuments(documents.filter((_, i) => i !== index))}
@@ -334,7 +359,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Bank Account Number *
+                  Bank Account Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -351,7 +376,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Contact Phone Number *
+                  Contact Phone Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="tel"
@@ -371,7 +396,8 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  required
+                  checked={agreedToTerms}
+                  onChange={(event) => setAgreedToTerms(event.target.checked)}
                   className="mt-1 w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
                 />
                 <span className="text-sm text-gray-700">
@@ -384,13 +410,14 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
               <button
                 type="button"
                 onClick={() => onNavigate('organizer-dashboard')}
-                className="flex-1 py-3 px-6 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all"
+                className="flex-1 rounded-lg bg-red-50 px-6 py-3 text-red-700 transition-all hover:bg-red-100"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 py-3 px-6 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg hover:from-green-600 hover:to-blue-700 transition-all shadow-md flex items-center justify-center gap-2"
+                disabled={!canSubmit}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-blue-600 px-6 py-3 text-white shadow-md transition-all hover:from-green-600 hover:to-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <CheckCircle className="w-5 h-5" />
                 Submit for Review

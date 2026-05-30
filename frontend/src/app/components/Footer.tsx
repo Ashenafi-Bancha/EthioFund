@@ -5,6 +5,8 @@ interface FooterProps {
 }
 
 export function Footer({ onNavigate }: FooterProps) {
+  const currentYear = new Date().getFullYear();
+
   return (
     <footer className="border-t border-gray-200 bg-[#071014] text-gray-300">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
@@ -53,11 +55,11 @@ export function Footer({ onNavigate }: FooterProps) {
               </div>
               <div className="flex items-center gap-2 text-gray-400">
                 <Phone className="h-4 w-4 text-green-400" />
-                <span>+251 11 234 5678</span>
+                <span>+251 938103340</span>
               </div>
               <div className="flex items-center gap-2 text-gray-400">
                 <MapPin className="h-4 w-4 text-green-400" />
-                <span>Bisrat Tower, Addis Ababa, Ethiopia</span>
+                <span>4 kilo, Addis Ababa, Ethiopia</span>
               </div>
             </div>
             <div className="mt-5 flex gap-3">
@@ -75,7 +77,7 @@ export function Footer({ onNavigate }: FooterProps) {
         </div>
 
         <div className="mt-12 border-t border-white/10 pt-6 text-center text-sm text-gray-500">
-          © 2026 EthioFund. Built for Ethiopia, trusted by the community.
+          © {currentYear} EthioFund. Built for Ethiopia, trusted by the community.
         </div>
       </div>
     </footer>

@@ -15,9 +15,25 @@ export const createCampaign = async (req: Request, res: Response, next: NextFunc
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
-    const campaign = await campaignsService.createCampaign(req.user.userId, req.body);
+    const uploadedFiles = req.files as
+      | { [fieldname: string]: Express.Multer.File[] }
+      | Express.Multer.File[]
+      | undefined;
+
+    const campaignImageFile = !Array.isArray(uploadedFiles) ? uploadedFiles?.campaign_image?.[0] : undefined;
+    const documentFiles = !Array.isArray(uploadedFiles) ? uploadedFiles?.supporting_documents ?? [] : [];
+
+    if (!campaignImageFile) {
+      return res.status(400).json({ success: false, message: 'Campaign image is required' });
+    }
+
+    const uploadedImageUrl = campaignImageFile ? `/uploads/campaign-assets/${campaignImageFile.filename}` : undefined;
+    const uploadedDocuments = documentFiles.map((file) => `/uploads/campaign-assets/${file.filename}`);
+
+    const campaign = await campaignsService.createCampaign(req.user.userId, req.body, uploadedImageUrl, uploadedDocuments);
     return res.status(201).json({ success: true, campaign });
   } catch (error) {
+    console.error('Failed to create campaign:', error);
     return next(error);
   }
 };
@@ -31,6 +47,19 @@ export const getAllCampaigns = async (req: Request, res: Response, next: NextFun
       organizerId: typeof req.query.organizer_id === 'string' ? req.query.organizer_id : undefined,
     });
 
+    return res.status(200).json({ success: true, campaigns });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getMyCampaigns = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const campaigns = await campaignsService.getMyCampaigns(req.user.userId);
     return res.status(200).json({ success: true, campaigns });
   } catch (error) {
     return next(error);

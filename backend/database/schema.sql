@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   total_donors INT NOT NULL DEFAULT 0,
   duration_days INT NOT NULL DEFAULT 30,
   image_url VARCHAR(255),
+  supporting_documents JSONB NOT NULL DEFAULT '[]'::jsonb,
   verified BOOLEAN NOT NULL DEFAULT FALSE,
   status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'active', 'closed', 'rejected', 'suspended')),
   category VARCHAR(30) NOT NULL CHECK (category IN ('medical', 'education', 'funeral', 'emergency', 'community')),
@@ -39,6 +40,9 @@ ADD COLUMN IF NOT EXISTS total_donors INT NOT NULL DEFAULT 0;
 
 ALTER TABLE campaigns
 ADD COLUMN IF NOT EXISTS share_count INT NOT NULL DEFAULT 0;
+
+ALTER TABLE campaigns
+ADD COLUMN IF NOT EXISTS supporting_documents JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS campaign_media (
   media_id SERIAL PRIMARY KEY,

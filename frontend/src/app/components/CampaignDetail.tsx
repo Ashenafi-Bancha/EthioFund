@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, CheckCircle, MapPin, Calendar, Share2, Heart, MessageCircle, Users, TrendingUp, Loader } from 'lucide-react';
+import { ArrowLeft, CheckCircle, MapPin, Calendar, Share2, Heart, MessageCircle, Users, TrendingUp, Loader, FileText, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCampaignDetail } from '../hooks/useCampaigns';
 import { useCampaignComments, useAddComment } from '../hooks/useComments';
 import { useCampaignDonations } from '../hooks/useDonations';
 import { useAuth } from '../context/AuthContext';
+import { apiRequest } from '../lib/api';
 import { EnhancedDonateModal } from './EnhancedDonateModal';
 import { ShareCampaignModal } from './ShareCampaignModal';
 import { CampaignUpdates } from './CampaignUpdates';
@@ -14,6 +15,24 @@ interface CampaignDetailProps {
   campaignId: string | null;
   onBack: () => void;
 }
+
+type CampaignUpdateRow = {
+  update_id: number;
+  campaign_id: number;
+  content: string;
+  posted_at: string;
+};
+
+type MilestoneRow = {
+  milestone_id: number;
+  campaign_id: number;
+  title: string;
+  description: string | null;
+  target_amount: string | number;
+  is_completed: boolean;
+  completed_at: string | null;
+  created_at: string;
+};
 
 export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
   const { user: currentUser } = useAuth();
@@ -27,6 +46,10 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
   const [shareCount, setShareCount] = useState<number>(campaign?.share_count ?? 0);
   const [newComment, setNewComment] = useState('');
   const [activeTab, setActiveTab] = useState<'story' | 'updates' | 'comments' | 'milestones'>('story');
+  const [updates, setUpdates] = useState<Array<{ id: string; campaignId: string; title: string; content: string; images: string[]; createdAt: string; createdBy: string }>>([]);
+  const [milestones, setMilestones] = useState<Array<{ id: string; amount: number; description: string; reached: boolean; reachedDate?: string }>>([]);
+  const updateCount = updates.length;
+  const milestoneCount = milestones.length;
 
   const handlePostComment = async () => {
     if (newComment.trim() && campaignId) {
@@ -36,12 +59,63 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
       });
       if (result) {
         setNewComment('');
-        toast.success('Comment posted successfully!');
+        if (result.pendingReview) {
+          toast.success('Comment submitted for moderation review.');
+        } else {
+          toast.success('Comment posted successfully!');
+        }
       } else {
         toast.error('Failed to post comment. Please try again.');
       }
     }
   };
+
+  useEffect(() => {
+    setShareCount(campaign?.share_count ?? 0);
+  }, [campaign?.share_count]);
+
+  useEffect(() => {
+    if (!campaignId) {
+      setUpdates([]);
+      setMilestones([]);
+      return;
+    }
+
+    const loadCampaignExtras = async () => {
+      try {
+        const [updatesResponse, milestonesResponse] = await Promise.all([
+          apiRequest<{ success?: boolean; updates?: CampaignUpdateRow[] } | CampaignUpdateRow[]>(`/campaigns/${campaignId}/updates`),
+          apiRequest<{ success?: boolean; milestones?: MilestoneRow[] } | MilestoneRow[]>(`/campaigns/${campaignId}/milestones`),
+        ]);
+
+        const updateRows = Array.isArray(updatesResponse) ? updatesResponse : updatesResponse.updates ?? [];
+        const milestoneRows = Array.isArray(milestonesResponse) ? milestonesResponse : milestonesResponse.milestones ?? [];
+
+        setUpdates(updateRows.map((update) => ({
+          id: String(update.update_id),
+          campaignId: String(update.campaign_id),
+          title: 'Campaign Update',
+          content: update.content,
+          images: [],
+          createdAt: update.posted_at,
+          createdBy: campaign?.organizer_name ?? 'Organizer',
+        })));
+
+        setMilestones(milestoneRows.map((milestone) => ({
+          id: String(milestone.milestone_id),
+          amount: Number(milestone.target_amount) || 0,
+          description: milestone.description || milestone.title,
+          reached: Boolean(milestone.is_completed),
+          reachedDate: milestone.completed_at ?? undefined,
+        })));
+      } catch {
+        setUpdates([]);
+        setMilestones([]);
+      }
+    };
+
+    void loadCampaignExtras();
+  }, [campaignId, campaign?.organizer_name]);
 
   if (campaignLoading) {
     return (
@@ -70,10 +144,8 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
   const progress = (campaign.raised_amount / campaign.goal_amount) * 100;
   const isOrganizer = currentUser?.id === campaign.organizer_id;
   const daysLeft = Math.max(0, Math.ceil((new Date(campaign.created_at).getTime() + campaign.duration_days * 86400000 - Date.now()) / 86400000));
-
-  useEffect(() => {
-    setShareCount(campaign?.share_count ?? 0);
-  }, [campaign?.share_count]);
+  const supportingDocuments = campaign.supporting_documents ?? [];
+  const canReviewDocuments = currentUser?.role === 'admin' || isOrganizer;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -141,6 +213,49 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
               </div>
             </div>
 
+            {canReviewDocuments && supportingDocuments.length > 0 && (
+              <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Submitted documents</h2>
+                    <p className="mt-1 text-sm text-gray-600">These files were submitted with the campaign and are visible to organizers and admins before approval.</p>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {supportingDocuments.map((document) => (
+                    <a
+                      key={document}
+                      href={document}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 transition-colors hover:border-green-300 hover:bg-green-50"
+                    >
+                      <FileText className="w-5 h-5 text-gray-600" />
+                      <span className="flex-1 break-all text-sm font-medium text-gray-800">{document.split('/').pop() || document}</span>
+                      <Download className="w-4 h-4 text-gray-500" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-green-900">Community discussion</p>
+                  <p className="mt-1 text-sm text-green-800">Comments are moderated.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('comments')}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-700"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Go to comments ({campaignComments.length})
+                </button>
+              </div>
+            </div>
+
             {/* Tabs */}
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               <div className="border-b">
@@ -163,7 +278,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                         : 'text-gray-600 hover:text-gray-900'
                     }`}
                   >
-                    Updates ({campaign.updates?.length || 0})
+                    Updates ({updateCount})
                   </button>
                   <button
                     onClick={() => setActiveTab('milestones')}
@@ -173,7 +288,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                         : 'text-gray-600 hover:text-gray-900'
                     }`}
                   >
-                    Milestones ({campaign.milestones?.length || 0})
+                    Milestones ({milestoneCount})
                   </button>
                   <button
                     onClick={() => setActiveTab('comments')}
@@ -197,7 +312,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
 
                 {activeTab === 'updates' && (
                   <CampaignUpdates 
-                    updates={[]} 
+                    updates={updates}
                     campaignId={campaign.id}
                     isOrganizer={isOrganizer}
                     currentUser={currentUser}
@@ -206,7 +321,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
 
                 {activeTab === 'milestones' && (
                   <Milestones 
-                    milestones={[]} 
+                    milestones={milestones}
                     currentAmount={campaign.raised_amount}
                   />
                 )}
@@ -227,7 +342,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                         <button
                           onClick={handlePostComment}
                           disabled={addingComment || !newComment.trim()}
-                          className="mt-3 px-6 py-2 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg hover:from-green-600 hover:to-blue-700 transition-all disabled:opacity-50"
+                          className="mt-3 px-6 py-2 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg hover:from-green-600 hover:to-blue-700 transition-all disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {addingComment ? 'Posting...' : 'Post Comment'}
                         </button>
@@ -264,7 +379,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                             </div>
                           ))
                         ) : (
-                          <p className="text-sm text-gray-600">No comments yet. Be the first to comment!</p>
+                          <p className="text-sm text-gray-600">No comments yet.</p>
                         )}
                       </div>
                     )}
@@ -393,7 +508,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
         <ShareCampaignModal
           campaign={campaign as any}
           onClose={() => setShowShareModal(false)}
-          onShare={() => setShareCount((c) => c + 1)}
+          onShare={() => setShareCount((c: number) => c + 1)}
         />
       )}
     </div>

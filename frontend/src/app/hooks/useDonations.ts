@@ -71,6 +71,7 @@ interface UseInitiateDonationResult {
  * Fetch donations for current user (donor)
  */
 export const useUserDonations = (): UseDonationsResult => {
+  const { token } = useAuth();
   const [donations, setDonations] = useState<DonationResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +81,9 @@ export const useUserDonations = (): UseDonationsResult => {
       try {
         setLoading(true);
         setError(null);
-        const response = await apiRequest<{ success?: boolean; donations?: DonationApiRow[] } | DonationApiRow[]>('/users/me/donations');
+        const response = await apiRequest<{ success?: boolean; donations?: DonationApiRow[] } | DonationApiRow[]>('/users/me/donations', {
+          authToken: token,
+        });
         const data = Array.isArray(response) ? response : response.donations ?? [];
         setDonations(data.map(normalizeDonation));
       } catch (err) {
@@ -92,7 +95,7 @@ export const useUserDonations = (): UseDonationsResult => {
     };
 
     fetchDonations();
-  }, []);
+  }, [token]);
 
   return { donations, loading, error };
 };

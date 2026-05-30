@@ -6,6 +6,7 @@ interface PaymentSuccessProps {
 
 export function PaymentSuccess({ onNavigate }: PaymentSuccessProps) {
   const txRef = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tx_ref') : null;
+  const isMockPayment = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('mode') === 'mock' : false;
 
   return (
     <section className="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
@@ -16,7 +17,9 @@ export function PaymentSuccess({ onNavigate }: PaymentSuccessProps) {
 
         <h1 className="mt-6 text-center text-3xl font-bold text-gray-900">Payment Successful</h1>
         <p className="mx-auto mt-3 max-w-xl text-center text-gray-600">
-          Thank you for supporting this campaign. Your donation has been verified and recorded.
+          {isMockPayment
+            ? 'This is a test donation. The campaign has been updated locally so you can verify the full donor flow.'
+            : 'Thank you for supporting this campaign. Your donation has been verified and recorded.'}
         </p>
 
         {txRef ? (

@@ -9,14 +9,13 @@ const pool = new Pool({
   password: env.DB_PASSWORD,
 });
 
-pool
-  .connect()
-  .then((client: PoolClient) => {
-    console.log('PostgreSQL connected successfully');
+export const pingDatabase = async (): Promise<void> => {
+  const client: PoolClient = await pool.connect();
+  try {
+    await client.query('SELECT 1');
+  } finally {
     client.release();
-  })
-  .catch((error: Error) => {
-    console.error('PostgreSQL connection failed:', error.message);
-  });
+  }
+};
 
 export default pool;
