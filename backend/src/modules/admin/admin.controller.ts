@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import * as adminService from './admin.service';
 import * as campaignsService from '../campaigns/campaigns.service';
+import * as commentsService from '../comments/comments.service';
 
 export const getDashboardStats = async (_req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
   try {
@@ -54,6 +55,24 @@ export const approveCampaign = async (req: Request, res: Response, next: NextFun
     }
 
     return res.status(200).json({ success: true, campaign });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getAllComments = async (_req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const comments = await commentsService.getAllCommentsForAdmin();
+    return res.status(200).json({ success: true, comments });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getActivityLogs = async (_req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const logs = await adminService.getActivityLogs();
+    return res.status(200).json({ success: true, logs });
   } catch (error) {
     return next(error);
   }

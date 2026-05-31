@@ -39,6 +39,21 @@ export interface PendingCommentResponse {
   created_at: string;
 }
 
+export interface AdminCommentResponse extends PendingCommentResponse {
+  moderation_status: 'approved' | 'pending_review' | 'rejected';
+  moderation_score: number | null;
+  moderated_at: string | null;
+}
+
+export interface AdminActivityLogResponse {
+  id: string;
+  user_id: string | null;
+  user_name: string | null;
+  user_role: string | null;
+  activity: string;
+  timestamp: string;
+}
+
 interface UseAdminStatsResult {
   stats: AdminStatsResponse | null;
   loading: boolean;
@@ -49,18 +64,35 @@ interface UsePendingCampaignsResult {
   campaigns: PendingCampaignResponse[];
   loading: boolean;
   error: string | null;
+  reload: () => void;
 }
 
 interface UsePendingWithdrawalsResult {
   withdrawals: PendingWithdrawalResponse[];
   loading: boolean;
   error: string | null;
+  reload: () => void;
 }
 
 interface UsePendingCommentsResult {
   comments: PendingCommentResponse[];
   loading: boolean;
   error: string | null;
+  reload: () => void;
+}
+
+interface UseAdminCommentsResult {
+  comments: AdminCommentResponse[];
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+interface UseAdminActivityLogsResult {
+  logs: AdminActivityLogResponse[];
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
 }
 
 interface UseApproveCampaignResult {
@@ -121,6 +153,7 @@ export const usePendingCampaigns = (): UsePendingCampaignsResult => {
   const [campaigns, setCampaigns] = useState<PendingCampaignResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
 
   useEffect(() => {
     const fetchCampaigns = async () => {
@@ -160,9 +193,9 @@ export const usePendingCampaigns = (): UsePendingCampaignsResult => {
     };
 
     fetchCampaigns();
-  }, [token]);
+  }, [token, refreshIndex]);
 
-  return { campaigns, loading, error };
+  return { campaigns, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
 };
 
 /**
@@ -173,6 +206,7 @@ export const usePendingWithdrawals = (): UsePendingWithdrawalsResult => {
   const [withdrawals, setWithdrawals] = useState<PendingWithdrawalResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
 
   useEffect(() => {
     const fetchWithdrawals = async () => {
@@ -212,9 +246,9 @@ export const usePendingWithdrawals = (): UsePendingWithdrawalsResult => {
     };
 
     fetchWithdrawals();
-  }, [token]);
+  }, [token, refreshIndex]);
 
-  return { withdrawals, loading, error };
+  return { withdrawals, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
 };
 
 /**
@@ -285,6 +319,7 @@ export const usePendingComments = (): UsePendingCommentsResult => {
   const [comments, setComments] = useState<PendingCommentResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
 
   useEffect(() => {
     const fetchPendingComments = async () => {
@@ -324,9 +359,119 @@ export const usePendingComments = (): UsePendingCommentsResult => {
     };
 
     fetchPendingComments();
-  }, [token]);
+  }, [token, refreshIndex]);
 
-  return { comments, loading, error };
+  return { comments, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
+};
+
+/**
+ * Fetch all comments for admin override review
+ */
+export const useAdminComments = (): UseAdminCommentsResult => {
+  const { token } = useAuth();
+  const [comments, setComments] = useState<AdminCommentResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchComments = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiRequest<{ success?: boolean; comments?: {
+          comment_id?: string | number;
+          campaign_id: string | number;
+          campaign_title?: string;
+          user_name?: string;
+          content?: string;
+          moderation_status: 'approved' | 'pending_review' | 'rejected';
+          moderation_reason?: string | null;
+          moderation_score?: string | number | null;
+          moderated_at?: string | null;
+          created_at: string;
+        }[] }>('/admin/comments', {
+          authToken: token,
+        });
+
+        const rows = response.comments ?? [];
+        setComments(
+          rows.map((comment) => ({
+            id: String(comment.comment_id ?? ''),
+            campaign_id: String(comment.campaign_id),
+            campaign_title: comment.campaign_title ?? 'Campaign',
+            user_name: comment.user_name ?? 'Community member',
+            message: comment.content ?? '',
+            moderation_reason: comment.moderation_reason ?? 'No reason recorded',
+            moderation_status: comment.moderation_status,
+            moderation_score: comment.moderation_score === null || comment.moderation_score === undefined ? null : Number(comment.moderation_score),
+            moderated_at: comment.moderated_at ?? null,
+            created_at: comment.created_at,
+          }))
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch admin comments');
+        setComments([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchComments();
+  }, [token, refreshIndex]);
+
+  return { comments, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
+};
+
+/**
+ * Fetch recent admin activity logs
+ */
+export const useAdminActivityLogs = (): UseAdminActivityLogsResult => {
+  const { token } = useAuth();
+  const [logs, setLogs] = useState<AdminActivityLogResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiRequest<{ success?: boolean; logs?: {
+          log_id?: string | number;
+          user_id?: string | number | null;
+          user_name?: string | null;
+          user_role?: string | null;
+          activity: string;
+          timestamp: string;
+        }[] }>('/admin/activity-logs', {
+          authToken: token,
+        });
+
+        const rows = response.logs ?? [];
+        setLogs(
+          rows.map((log) => ({
+            id: String(log.log_id ?? ''),
+            user_id: log.user_id === null || log.user_id === undefined ? null : String(log.user_id),
+            user_name: log.user_name ?? null,
+            user_role: log.user_role ?? null,
+            activity: log.activity,
+            timestamp: log.timestamp,
+          }))
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch activity logs');
+        setLogs([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLogs();
+  }, [token, refreshIndex]);
+
+  return { logs, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
 };
 
 /**

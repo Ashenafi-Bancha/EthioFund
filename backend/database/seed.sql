@@ -1,8 +1,8 @@
 INSERT INTO users (full_name, email, phone_number, password_hash, role, status)
 VALUES (
-  'System Admin',
+  'EthioFund Admin',
   'admin@ethiofund.com',
-  '0911000000',
+  '0911223344',
   crypt('Admin@123', gen_salt('bf')),
   'admin',
   'active'
@@ -15,9 +15,9 @@ SET full_name = EXCLUDED.full_name,
 
 INSERT INTO users (full_name, email, phone_number, password_hash, role, status)
 VALUES (
-  'Addis Community Organizer',
+  'Ashenafi Bancha',
   'organizer@ethiofund.com',
-  '0911000001',
+  '0938103340',
   crypt('Organizer@123', gen_salt('bf')),
   'organizer',
   'active'

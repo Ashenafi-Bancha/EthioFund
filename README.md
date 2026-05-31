@@ -1,6 +1,6 @@
 # EthioFund
 
-EthioFund is a full-stack crowdfunding platform for Ethiopia with React, TypeScript, Express, and PostgreSQL.
+EthioFund is a modern full-stack crowdfunding platform built to empower individuals, communities, startups, charities, and organizations across Ethiopia to raise funds, support impactful causes, and connect with donors through a secure and transparent digital ecosystem. Developed using React, TypeScript, Express.js, and PostgreSQL, the platform provides a scalable and responsive user experience with robust backend services, role-based authentication, campaign management, donation tracking, real-time updates, and administrative controls. EthioFund aims to bridge the gap between project creators and supporters by offering an accessible, reliable, and technology-driven solution that promotes financial inclusion, social impact, innovation, and community-driven fundraising throughout Ethiopia.
 
 This repository is set up as a zero-setup, one-command full stack workflow with Docker, while still keeping a local non-Docker path for developers who want it.
 
@@ -11,7 +11,7 @@ This repository is set up as a zero-setup, one-command full stack workflow with 
 This is the recommended path for teams and new contributors. It is the default zero-setup, one-command full stack setup.
 
 ```bash
-git clone <repo>
+git clone https://github.com/Ashenafi-Bancha/EthioFund
 cd ethiofund
 docker compose up
 ```
@@ -51,7 +51,7 @@ Prerequisites:
 Clone the repository and install dependencies:
 
 ```bash
-git clone <repo>
+git clone https://github.com/Ashenafi-Bancha/EthioFund
 cd ethiofund/backend
 pnpm install
 cd ../frontend

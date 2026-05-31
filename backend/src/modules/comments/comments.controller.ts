@@ -83,7 +83,12 @@ export const reviewComment = async (req: Request, res: Response, next: NextFunct
 
     const decision = String(req.body.decision || '').toLowerCase();
     const reason = req.body.reason ? String(req.body.reason) : undefined;
-    const comment = await commentsService.reviewComment(String(req.params.id), decision as 'approved' | 'rejected', reason);
+    const comment = await commentsService.reviewComment(
+      String(req.params.id),
+      decision as 'approved' | 'rejected',
+      reason,
+      req.user?.userId ?? null
+    );
 
     if (!comment) {
       return res.status(404).json({ success: false, message: 'Comment not found' });

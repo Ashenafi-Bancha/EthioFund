@@ -1,4 +1,5 @@
 import pool from '../../config/db';
+import { recordActivity } from '../../middleware/activityLogger';
 
 export const getDashboardStats = async () => {
   const [users, campaigns, donations, withdrawals] = await Promise.all([
@@ -28,6 +29,9 @@ export const updateUserRole = async (userId: string, role: string) => {
     'UPDATE users SET role = $1 WHERE user_id = $2 RETURNING user_id, full_name, email, phone_number, role, status, created_at',
     [role, userId]
   );
+  if (result.rows[0]) {
+    void recordActivity(null, `Admin updated user ${userId} role to ${role}`);
+  }
   return result.rows[0] || null;
 };
 
@@ -36,6 +40,9 @@ export const updateUserStatus = async (userId: string, status: string) => {
     'UPDATE users SET status = $1 WHERE user_id = $2 RETURNING user_id, full_name, email, phone_number, role, status, created_at',
     [status, userId]
   );
+  if (result.rows[0]) {
+    void recordActivity(null, `Admin updated user ${userId} status to ${status}`);
+  }
   return result.rows[0] || null;
 };
 
@@ -55,6 +62,9 @@ export const updateWithdrawalStatus = async (withdrawalId: string, status: strin
     'UPDATE withdrawals SET status = $1 WHERE withdrawal_id = $2 RETURNING withdrawal_id, amount, status, bank_account, request_date, campaign_id',
     [status, withdrawalId]
   );
+  if (result.rows[0]) {
+    void recordActivity(null, `Admin updated withdrawal ${withdrawalId} status to ${status}`);
+  }
   return result.rows[0] || null;
 };
 
@@ -63,5 +73,21 @@ export const reviewCampaign = async (campaignId: string, status: string) => {
     'UPDATE campaigns SET status = $1 WHERE campaign_id = $2 RETURNING campaign_id, title, description, goal_amount, raised_amount, status, category, organizer_id, created_at',
     [status, campaignId]
   );
+  if (result.rows[0]) {
+    void recordActivity(null, `Admin reviewed campaign ${campaignId} as ${status}`);
+  }
   return result.rows[0] || null;
+};
+
+export const getActivityLogs = async (limit = 100) => {
+  const result = await pool.query(
+    `SELECT l.log_id, l.user_id, l.activity, l.timestamp, u.full_name AS user_name, u.role AS user_role
+     FROM activity_logs l
+     LEFT JOIN users u ON u.user_id = l.user_id
+     ORDER BY l.timestamp DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  return result.rows;
 };

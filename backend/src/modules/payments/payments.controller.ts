@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import env from '../../config/env';
 import * as chapaService from './chapa.service';
 import * as donationsService from '../donations/donations.service';
 
@@ -8,6 +9,8 @@ export const initializePayment = async (req: Request, res: Response, next: NextF
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
+    const clientOrigin = String(req.get('origin') || req.body?.client_origin || env.CLIENT_URL || '').trim().replace(/\/$/, '');
+
     const donationId = Number(req.body?.donation_id || 0);
 
     if (donationId > 0) {
@@ -15,6 +18,7 @@ export const initializePayment = async (req: Request, res: Response, next: NextF
         email: req.body?.email,
         firstName: req.body?.first_name,
         lastName: req.body?.last_name,
+        clientOrigin,
       });
 
       return res.status(200).json({ success: true, payment });
@@ -38,6 +42,7 @@ export const initializePayment = async (req: Request, res: Response, next: NextF
       email: req.body?.email,
       firstName: req.body?.first_name,
       lastName: req.body?.last_name,
+      clientOrigin,
     });
 
     return res.status(201).json({ success: true, donation, payment });
@@ -56,8 +61,12 @@ export const verifyPayment = async (req: Request, res: Response, next: NextFunct
     const result = await chapaService.verifyAndFinalizeTransaction(txRef);
 
     if (req.method === 'GET') {
-      const path = result.status === 'success' ? '/payment-success' : '/payment-failed';
-      const redirectUrl = `${chapaService.getClientBaseUrl()}${path}?tx_ref=${encodeURIComponent(txRef)}`;
+      const path = result.status === 'success'
+        ? '/payment-success'
+        : result.status === 'pending'
+          ? '/payment-pending'
+          : '/payment-failed';
+      const redirectUrl = `${result.redirectBaseUrl || chapaService.getClientBaseUrl()}${path}?tx_ref=${encodeURIComponent(txRef)}`;
       return res.redirect(302, redirectUrl);
     }
 

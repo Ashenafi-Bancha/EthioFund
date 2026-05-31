@@ -15,5 +15,7 @@ router.patch('/campaigns/:id/approve', controller.approveCampaign);
 router.patch('/campaigns/:id/feature', controller.featureCampaign);
 router.get('/withdrawals', controller.getWithdrawalRequests);
 router.patch('/withdrawals/:id/status', controller.updateWithdrawalStatus);
+router.get('/comments', controller.getAllComments);
+router.get('/activity-logs', controller.getActivityLogs);
 
 export default router;

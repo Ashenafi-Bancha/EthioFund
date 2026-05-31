@@ -6,7 +6,7 @@ import { useCampaignComments, useAddComment } from '../hooks/useComments';
 import { useCampaignDonations } from '../hooks/useDonations';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../lib/api';
-import { EnhancedDonateModal } from './EnhancedDonateModal';
+import { DonateModal } from './EnhancedDonateModal';
 import { ShareCampaignModal } from './ShareCampaignModal';
 import { CampaignUpdates } from './CampaignUpdates';
 import { Milestones } from './Milestones';
@@ -498,7 +498,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
       </div>
 
       {showDonateModal && campaign && (
-        <EnhancedDonateModal
+        <DonateModal
           campaign={campaign as any}
           onClose={() => setShowDonateModal(false)}
         />

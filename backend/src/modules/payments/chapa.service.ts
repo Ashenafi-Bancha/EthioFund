@@ -36,14 +36,16 @@ type PaymentRow = {
   tx_ref: string;
   donation_id: number | null;
   campaign_id: number;
+  client_origin: string | null;
   amount: string;
   status: 'pending' | 'success' | 'failed' | 'cancelled';
 };
 
 type VerifyOutcome = {
   txRef: string;
-  status: 'success' | 'failed' | 'cancelled';
+  status: 'success' | 'failed' | 'cancelled' | 'pending';
   source: 'verify' | 'idempotent';
+  redirectBaseUrl: string;
 };
 
 const chapaClient = axios.create({
@@ -69,6 +71,9 @@ const isMockPaymentMode = () => {
 const buildMockCheckoutUrl = (txRef: string) =>
   `${env.CLIENT_URL.replace(/\/$/, '')}/payment-success?tx_ref=${encodeURIComponent(txRef)}&mode=mock`;
 
+const getRedirectBaseUrl = (payment: { client_origin?: string | null } | null | undefined): string =>
+  String(payment?.client_origin || env.CLIENT_URL || '').trim().replace(/\/$/, '');
+
 const getDonationContext = async (donationId: string): Promise<DonationContext | null> => {
   const result = await pool.query<DonationContext>(
     `SELECT d.donation_id, d.amount, d.payment_status, d.donor_id, d.campaign_id,
@@ -85,7 +90,7 @@ const getDonationContext = async (donationId: string): Promise<DonationContext |
 
 const getPaymentByTxRef = async (txRef: string): Promise<PaymentRow | null> => {
   const result = await pool.query<PaymentRow>(
-    'SELECT id, tx_ref, donation_id, campaign_id, amount, status FROM payments WHERE tx_ref = $1 LIMIT 1',
+    'SELECT id, tx_ref, donation_id, campaign_id, client_origin, amount, status FROM payments WHERE tx_ref = $1 LIMIT 1',
     [txRef]
   );
 
@@ -94,7 +99,7 @@ const getPaymentByTxRef = async (txRef: string): Promise<PaymentRow | null> => {
 
 const generateTxRef = (): string => `ETHIOFUND-${randomBytes(12).toString('hex').toUpperCase()}`;
 
-const normalizeVerifyStatus = (payload: ChapaVerifyApiResponse): 'success' | 'failed' | 'cancelled' => {
+const normalizeVerifyStatus = (payload: ChapaVerifyApiResponse): 'success' | 'failed' | 'cancelled' | 'pending' => {
   const raw = String(payload.data?.status || payload.status || '')
     .toLowerCase()
     .trim();
@@ -107,10 +112,14 @@ const normalizeVerifyStatus = (payload: ChapaVerifyApiResponse): 'success' | 'fa
     return 'cancelled';
   }
 
+  if (raw === 'pending' || raw === 'processing' || raw === 'initiated' || raw === 'incomplete') {
+    return 'pending';
+  }
+
   return 'failed';
 };
 
-const verifyWithChapa = async (txRef: string): Promise<{ status: 'success' | 'failed' | 'cancelled'; paymentMethod?: string }> => {
+const verifyWithChapa = async (txRef: string): Promise<{ status: 'success' | 'failed' | 'cancelled' | 'pending'; paymentMethod?: string }> => {
   const response = await chapaClient.get<ChapaVerifyApiResponse>(`/transaction/verify/${encodeURIComponent(txRef)}`);
   return {
     status: normalizeVerifyStatus(response.data || {}),
@@ -127,6 +136,7 @@ export const initializeDonationPayment = async (
     email?: unknown;
     firstName?: unknown;
     lastName?: unknown;
+    clientOrigin?: unknown;
   }
 ) => {
   const donation = await getDonationContext(String(donationId));
@@ -148,12 +158,17 @@ export const initializeDonationPayment = async (
   const firstName = String(override?.firstName || donation.full_name?.split(' ')[0] || 'Donor').trim();
   const lastName = String(override?.lastName || donation.full_name?.split(' ').slice(1).join(' ') || 'User').trim();
   const email = String(override?.email || donation.email || '').trim();
+  const clientOrigin = String(override?.clientOrigin || env.CLIENT_URL || '').trim().replace(/\/$/, '');
+  const chapaDescription = (() => {
+    const source = (donation.campaign_title || 'Campaign donation').trim();
+    return source.length > 50 ? `${source.slice(0, 47)}...` : source;
+  })();
 
   if (mockMode) {
     await pool.query(
-      `INSERT INTO payments (tx_ref, donation_id, campaign_id, donor_name, email, amount, status, payment_method)
-       VALUES ($1, $2, $3, $4, $5, $6, 'success', 'mock-chapa')`,
-      [txRef, donationId, donation.campaign_id, `${firstName} ${lastName}`.trim(), email || 'test@ethiofund.local', donation.amount]
+      `INSERT INTO payments (tx_ref, donation_id, campaign_id, client_origin, donor_name, email, amount, status, payment_method)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'success', 'mock-chapa')`,
+      [txRef, donationId, donation.campaign_id, clientOrigin, `${firstName} ${lastName}`.trim(), email || 'test@ethiofund.local', donation.amount]
     );
 
     await pool.query(
@@ -169,7 +184,7 @@ export const initializeDonationPayment = async (
 
     return {
       txRef,
-      checkoutUrl: buildMockCheckoutUrl(txRef),
+      checkoutUrl: `${clientOrigin}/payment-success?tx_ref=${encodeURIComponent(txRef)}&mode=mock`,
     };
   }
 
@@ -180,9 +195,9 @@ export const initializeDonationPayment = async (
   }
 
   await pool.query(
-    `INSERT INTO payments (tx_ref, donation_id, campaign_id, donor_name, email, amount, status, payment_method)
-     VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'chapa')`,
-    [txRef, donationId, donation.campaign_id, `${firstName} ${lastName}`.trim(), email, donation.amount]
+    `INSERT INTO payments (tx_ref, donation_id, campaign_id, client_origin, donor_name, email, amount, status, payment_method)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', 'chapa')`,
+    [txRef, donationId, donation.campaign_id, clientOrigin, `${firstName} ${lastName}`.trim(), email, donation.amount]
   );
 
   await pool.query(
@@ -204,7 +219,7 @@ export const initializeDonationPayment = async (
       return_url: `${env.SERVER_URL}/api/payments/verify?tx_ref=${encodeURIComponent(txRef)}`,
       customization: {
         title: 'EthioFund Donate',
-        description: donation.campaign_title || 'Campaign donation',
+        description: chapaDescription,
       },
     });
 
@@ -253,6 +268,7 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
       txRef,
       status: existing.status === 'success' ? 'success' : existing.status,
       source: 'idempotent',
+      redirectBaseUrl: getRedirectBaseUrl(existing),
     };
   }
 
@@ -264,7 +280,7 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
     await client.query('BEGIN');
 
     const lockResult = await client.query<PaymentRow>(
-      'SELECT id, tx_ref, donation_id, campaign_id, amount, status FROM payments WHERE tx_ref = $1 FOR UPDATE',
+      'SELECT id, tx_ref, donation_id, campaign_id, client_origin, amount, status FROM payments WHERE tx_ref = $1 FOR UPDATE',
       [txRef]
     );
 
@@ -281,6 +297,7 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
         txRef,
         status: locked.status === 'success' ? 'success' : locked.status,
         source: 'idempotent',
+        redirectBaseUrl: getRedirectBaseUrl(locked),
       };
     }
 
@@ -313,7 +330,7 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
             [donationUpdate.rows[0].amount, donationUpdate.rows[0].campaign_id]
           );
         }
-      } else {
+      } else if (nextStatus === 'failed' || nextStatus === 'cancelled') {
         await client.query(
           `UPDATE donations
            SET payment_status = 'failed'
@@ -329,6 +346,7 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
       txRef,
       status: nextStatus,
       source: 'verify',
+      redirectBaseUrl: getRedirectBaseUrl(locked),
     };
   } catch (error) {
     await client.query('ROLLBACK');

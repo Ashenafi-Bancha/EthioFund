@@ -56,15 +56,15 @@ const env: AppEnv = {
   DB_PASSWORD: process.env.DB_PASSWORD as string,
   JWT_SECRET: process.env.JWT_SECRET as string,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
-  CHAPA_SECRET_KEY: process.env.CHAPA_SECRET_KEY,
-  CHAPA_PUBLIC_KEY: process.env.CHAPA_PUBLIC_KEY,
-  CHAPA_ENCRYPTION_KEY: process.env.CHAPA_ENCRYPTION_KEY,
-  CHAPA_BASE_URL: process.env.CHAPA_BASE_URL || 'https://api.chapa.co/v1',
+  CHAPA_SECRET_KEY: process.env.CHAPA_SECRET_KEY?.trim(),
+  CHAPA_PUBLIC_KEY: process.env.CHAPA_PUBLIC_KEY?.trim(),
+  CHAPA_ENCRYPTION_KEY: process.env.CHAPA_ENCRYPTION_KEY?.trim(),
+  CHAPA_BASE_URL: (process.env.CHAPA_BASE_URL || 'https://api.chapa.co/v1').trim(),
   PAYMENT_MODE: paymentMode,
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY?.trim(),
   GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
-  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
-  SERVER_URL: process.env.SERVER_URL || 'http://localhost:5000',
+  CLIENT_URL: (process.env.CLIENT_URL || 'http://localhost:5173').trim(),
+  SERVER_URL: (process.env.SERVER_URL || 'http://localhost:5000').trim(),
 };
 
 export default env;

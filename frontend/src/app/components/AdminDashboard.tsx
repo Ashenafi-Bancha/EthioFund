@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle, XCircle, Clock, Eye, Users, FileText, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -9,6 +9,8 @@ import {
   useRejectCampaign,
   usePendingComments,
   useReviewComment,
+  useAdminComments,
+  useAdminActivityLogs,
 } from '../hooks/useAdmin';
 import { useAuth } from '../context/AuthContext';
 
@@ -19,13 +21,28 @@ interface AdminDashboardProps {
 export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
   const { user } = useAuth();
   const { stats, loading: statsLoading } = useAdminStats();
-  const { campaigns: pendingCampaigns, loading: campaignsLoading } = usePendingCampaigns();
+  const { campaigns: pendingCampaigns, loading: campaignsLoading, reload: reloadCampaigns } = usePendingCampaigns();
   const { withdrawals: pendingWithdrawals, loading: withdrawalsLoading } = usePendingWithdrawals();
-  const { comments: pendingComments, loading: commentsLoading } = usePendingComments();
+  const { comments: pendingComments, loading: commentsLoading, reload: reloadPendingComments } = usePendingComments();
   const { approveCampaign, loading: approvingCampaign } = useApproveCampaign();
   const { rejectCampaign, loading: rejectingCampaign } = useRejectCampaign();
   const { reviewComment, loading: reviewingComment } = useReviewComment();
-  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'withdrawals' | 'comments'>('overview');
+  const { comments: allComments, loading: allCommentsLoading, reload: reloadAllComments } = useAdminComments();
+  const { logs: activityLogs, loading: logsLoading, reload: reloadActivityLogs } = useAdminActivityLogs();
+  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'withdrawals' | 'comments' | 'activity'>('overview');
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [overrideDecision, setOverrideDecision] = useState<'approved' | 'rejected'>('approved');
+  const [overrideReason, setOverrideReason] = useState('');
+
+  useEffect(() => {
+    if (!selectedCommentId && allComments.length > 0) {
+      setSelectedCommentId(allComments[0].id);
+      setOverrideDecision(allComments[0].moderation_status === 'rejected' ? 'approved' : allComments[0].moderation_status);
+      setOverrideReason(allComments[0].moderation_reason === 'No reason recorded' ? '' : allComments[0].moderation_reason);
+    }
+  }, [allComments, selectedCommentId]);
+
+  const selectedComment = allComments.find((comment) => comment.id === selectedCommentId) ?? null;
 
   if (!user || user.role !== 'admin') {
     return null;
@@ -35,6 +52,7 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
     const ok = await approveCampaign(campaignId);
     if (ok) {
       toast.success('Campaign approved and published.');
+      reloadCampaigns();
     } else {
       toast.error('Failed to approve campaign.');
     }
@@ -44,15 +62,36 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
     const ok = await rejectCampaign(campaignId, 'Rejected after admin review');
     if (ok) {
       toast.success('Campaign rejected.');
+      reloadCampaigns();
     } else {
       toast.error('Failed to reject campaign.');
     }
   };
 
-  const handleCommentReview = async (commentId: string, decision: 'approved' | 'rejected') => {
-    const ok = await reviewComment(commentId, decision);
+  const handleSelectComment = (commentId: string) => {
+    const comment = allComments.find((item) => item.id === commentId);
+    if (!comment) {
+      return;
+    }
+
+    setSelectedCommentId(comment.id);
+    setOverrideDecision(comment.moderation_status === 'pending_review' ? 'approved' : comment.moderation_status);
+    setOverrideReason(comment.moderation_reason === 'No reason recorded' ? '' : comment.moderation_reason);
+    setActiveTab('comments');
+  };
+
+  const handleCommentReview = async () => {
+    if (!selectedComment) {
+      toast.error('Select a comment first.');
+      return;
+    }
+
+    const ok = await reviewComment(selectedComment.id, overrideDecision, overrideReason.trim() || undefined);
     if (ok) {
-      toast.success(decision === 'approved' ? 'Comment approved.' : 'Comment rejected.');
+      toast.success(overrideDecision === 'approved' ? 'Comment approved.' : 'Comment rejected.');
+      reloadAllComments();
+      reloadPendingComments();
+      reloadActivityLogs();
     } else {
       toast.error('Failed to update comment moderation decision.');
     }
@@ -124,8 +163,15 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
                 onClick={() => setActiveTab('comments')}
                 className={`px-6 py-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'comments' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-600 hover:text-gray-900'}`}
               >
-                Comment moderation
+                Comment overrides
                 {pendingComments.length > 0 && <span className="ml-2 rounded-full bg-orange-500 px-2 py-0.5 text-xs text-white">{pendingComments.length}</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('activity')}
+                className={`px-6 py-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'activity' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-600 hover:text-gray-900'}`}
+              >
+                Activity log
               </button>
             </div>
           </div>
@@ -258,66 +304,160 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
             )}
 
             {activeTab === 'comments' && (
-              <div>
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-900">Pending comment reviews</h2>
-                  {commentsLoading && (
-                    <div className="flex items-center gap-2 text-sm text-gray-500">
-                      <Loader className="h-4 w-4 animate-spin" />
-                      Loading comments...
+              <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+                <div>
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-gray-900">All comments</h2>
+                    {(allCommentsLoading || commentsLoading) && (
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <Loader className="h-4 w-4 animate-spin" />
+                        Loading comments...
+                      </div>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto rounded-2xl border border-gray-200">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Campaign</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">User</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Comment</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Date</th>
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 bg-white">
+                        {allComments.length > 0 ? (
+                          allComments.map((comment) => (
+                            <tr key={comment.id} className={`hover:bg-gray-50 ${selectedCommentId === comment.id ? 'bg-green-50/60' : ''}`}>
+                              <td className="px-6 py-4 font-semibold text-gray-900">{comment.campaign_title}</td>
+                              <td className="px-6 py-4 text-gray-700">{comment.user_name}</td>
+                              <td className="px-6 py-4 text-sm">
+                                <span
+                                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                    comment.moderation_status === 'approved'
+                                      ? 'bg-green-100 text-green-700'
+                                      : comment.moderation_status === 'rejected'
+                                        ? 'bg-red-100 text-red-700'
+                                        : 'bg-orange-100 text-orange-700'
+                                  }`}
+                                >
+                                  {comment.moderation_status.replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-gray-700">
+                                <p className="max-w-md whitespace-pre-wrap break-words">{comment.message}</p>
+                                <p className="mt-2 text-xs text-gray-500">{comment.moderation_reason}</p>
+                              </td>
+                              <td className="px-6 py-4 text-gray-700">{new Date(comment.created_at).toLocaleDateString()}</td>
+                              <td className="px-6 py-4">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectComment(comment.id)}
+                                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+                                >
+                                  Review
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-10 text-center text-gray-500">No comments found.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-sm">
+                  <h3 className="text-lg font-semibold text-gray-900">Override review</h3>
+                  {selectedComment ? (
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-700">{selectedComment.campaign_title}</div>
+                        <div className="text-sm text-gray-600">By {selectedComment.user_name}</div>
+                      </div>
+                      <div className="rounded-xl bg-white p-4 text-sm text-gray-700 shadow-sm">
+                        <div className="whitespace-pre-wrap break-words">{selectedComment.message}</div>
+                      </div>
+                      <div className="grid gap-3">
+                        <label className="text-sm font-medium text-gray-700">
+                          Decision
+                          <select
+                            value={overrideDecision}
+                            onChange={(event) => setOverrideDecision(event.target.value as 'approved' | 'rejected')}
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-green-500"
+                          >
+                            <option value="approved">Approve</option>
+                            <option value="rejected">Reject</option>
+                          </select>
+                        </label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Reason
+                          <textarea
+                            value={overrideReason}
+                            onChange={(event) => setOverrideReason(event.target.value)}
+                            rows={4}
+                            placeholder="Optional reason for the override"
+                            className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-green-500"
+                          />
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCommentReview()}
+                        disabled={reviewingComment}
+                        className="inline-flex w-full items-center justify-center rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {reviewingComment ? 'Saving...' : 'Save override'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-500">
+                      Select a comment to override its moderation decision.
                     </div>
                   )}
                 </div>
-                <div className="overflow-x-auto">
+              </div>
+            )}
+
+            {activeTab === 'activity' && (
+              <div>
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Activity log</h2>
+                  {logsLoading && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Loader className="h-4 w-4 animate-spin" />
+                      Loading activity...
+                    </div>
+                  )}
+                </div>
+                <div className="overflow-x-auto rounded-2xl border border-gray-200">
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Campaign</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">User</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Comment</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Reason</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Actions</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Role</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Activity</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Time</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {pendingComments.length > 0 ? (
-                        pendingComments.map((comment) => (
-                          <tr key={comment.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 font-semibold text-gray-900">{comment.campaign_title}</td>
-                            <td className="px-6 py-4 text-gray-700">{comment.user_name}</td>
-                            <td className="px-6 py-4 text-gray-700">
-                              <p className="max-w-md whitespace-pre-wrap break-words">{comment.message}</p>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">{comment.moderation_reason}</td>
-                            <td className="px-6 py-4 text-gray-700">{new Date(comment.created_at).toLocaleDateString()}</td>
-                            <td className="px-6 py-4">
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => void handleCommentReview(comment.id, 'approved')}
-                                  disabled={reviewingComment}
-                                  className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50 disabled:opacity-50"
-                                  title="Approve"
-                                >
-                                  <CheckCircle className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void handleCommentReview(comment.id, 'rejected')}
-                                  disabled={reviewingComment}
-                                  className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-                                  title="Reject"
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {activityLogs.length > 0 ? (
+                        activityLogs.map((log) => (
+                          <tr key={log.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 font-medium text-gray-900">{log.user_name ?? 'System'}</td>
+                            <td className="px-6 py-4 text-gray-700">{log.user_role ?? 'system'}</td>
+                            <td className="px-6 py-4 text-gray-700">{log.activity}</td>
+                            <td className="px-6 py-4 text-gray-700">{new Date(log.timestamp).toLocaleString()}</td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={6} className="px-6 py-10 text-center text-gray-500">No pending comments for review.</td>
+                          <td colSpan={4} className="px-6 py-10 text-center text-gray-500">No activity logs yet.</td>
                         </tr>
                       )}
                     </tbody>

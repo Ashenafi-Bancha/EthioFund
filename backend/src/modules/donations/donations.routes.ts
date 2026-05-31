@@ -6,6 +6,8 @@ import * as controller from './donations.controller';
 const router = express.Router();
 
 router.get('/campaign/:campaign_id', controller.getDonationsByCampaign);
+router.get('/campaign/:campaign_id/donations', controller.getDonationsByCampaign);
+router.get('/campaigns/:campaign_id/donations', controller.getDonationsByCampaign);
 router.post(
   '/',
   verifyToken,

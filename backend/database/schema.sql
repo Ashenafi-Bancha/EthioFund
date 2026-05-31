@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS payments (
   tx_ref VARCHAR(60) UNIQUE NOT NULL,
   donation_id INT REFERENCES donations(donation_id) ON DELETE SET NULL,
   campaign_id INT NOT NULL REFERENCES campaigns(campaign_id) ON DELETE CASCADE,
+  client_origin VARCHAR(255),
   donor_name VARCHAR(120) NOT NULL,
   email VARCHAR(120) NOT NULL,
   amount DECIMAL(12,2) NOT NULL,
@@ -102,6 +103,9 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE payments
+ADD COLUMN IF NOT EXISTS client_origin VARCHAR(255);
 
 CREATE TABLE IF NOT EXISTS comments (
   comment_id SERIAL PRIMARY KEY,

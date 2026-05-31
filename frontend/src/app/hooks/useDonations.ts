@@ -119,7 +119,7 @@ export const useCampaignDonations = (campaignId: string | null): UseDonationsRes
       try {
         setLoading(true);
         setError(null);
-        const response = await apiRequest<{ success?: boolean; donations?: DonationApiRow[] } | DonationApiRow[]>(`/campaigns/${campaignId}/donations`);
+        const response = await apiRequest<{ success?: boolean; donations?: DonationApiRow[] } | DonationApiRow[]>(`/donations/campaign/${campaignId}`);
         const data = Array.isArray(response) ? response : response.donations ?? [];
         setDonations(data.map(normalizeDonation));
       } catch (err) {

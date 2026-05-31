@@ -12,6 +12,7 @@ import { AboutPage } from './components/AboutPage';
 import { ContactPage } from './components/ContactPage';
 import { PaymentSuccess } from './components/PaymentSuccess';
 import { PaymentFailed } from './components/PaymentFailed';
+import { PaymentPending } from './components/PaymentPending';
 import { Navigation } from './components/Navigation';
 import { Footer } from './components/Footer';
 import { useAuth } from './context/AuthContext';
@@ -33,6 +34,10 @@ function getInitialPage(): string {
     return 'payment-failed';
   }
 
+  if (path === '/payment-pending') {
+    return 'payment-pending';
+  }
+
   return 'home';
 }
 
@@ -40,7 +45,7 @@ function App() {
   const { user, ready, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState<string>(getInitialPage);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
-  const isPaymentStatusPage = useMemo(() => currentPage === 'payment-success' || currentPage === 'payment-failed', [currentPage]);
+  const isPaymentStatusPage = useMemo(() => currentPage === 'payment-success' || currentPage === 'payment-failed' || currentPage === 'payment-pending', [currentPage]);
 
   const handleLogin = (user: User) => {
     // Redirect based on role
@@ -93,6 +98,8 @@ function App() {
         return <PaymentSuccess onNavigate={setCurrentPage} />;
       case 'payment-failed':
         return <PaymentFailed onNavigate={setCurrentPage} />;
+      case 'payment-pending':
+        return <PaymentPending onNavigate={setCurrentPage} />;
       default:
         return <Home onNavigate={setCurrentPage} onViewCampaign={viewCampaignDetail} />;
     }
