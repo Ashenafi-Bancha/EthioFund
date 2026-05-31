@@ -1,3 +1,5 @@
+// Main Express application setup: mounts routes, middleware, and health checks.
+// Keep this file minimal — business logic lives in modules/* and middleware/*.
 import cors from 'cors';
 import express, { type Application } from 'express';
 import helmet from 'helmet';
@@ -49,8 +51,12 @@ app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
+// Serve uploaded files from the `uploads` directory. Ensure this folder
+// exists in production or is created at runtime by the server.
 app.use('/uploads', express.static(path.resolve(process.cwd(), 'uploads')));
 
+// Lightweight health check used by load balancers and deployment probes.
+// It attempts a quick DB ping to report service readiness.
 const respondToHealthCheck = async (_req: express.Request, res: express.Response): Promise<void> => {
   try {
     await pingDatabase();
@@ -63,6 +69,7 @@ const respondToHealthCheck = async (_req: express.Request, res: express.Response
 app.get('/health', respondToHealthCheck);
 app.get('/api/health', respondToHealthCheck);
 app.get('/api', (_req, res) => {
+  // Simple endpoint to verify the API server process is up.
   res.json({ success: true, message: 'EthioFund API is running' });
 });
 
@@ -130,6 +137,7 @@ app.get('/payment-success', renderPaymentStatusPage('Payment successful', 'Your 
 app.get('/payment-failed', renderPaymentStatusPage('Payment not completed', 'The payment was not confirmed as successful. You can return to EthioFund and try again.', '#fee2e2'));
 app.get('/payment-pending', renderPaymentStatusPage('Payment pending', 'Your payment is still being confirmed. Please wait a moment and check again if needed.', '#dbeafe'));
 
+// Central error handler — keeps response shape consistent across the API.
 app.use(errorHandler);
 
 export default app;

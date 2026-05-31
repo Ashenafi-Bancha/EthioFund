@@ -2,6 +2,9 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 
+// Load environment variables from a nearby .env file when present. The
+// repository also provides `.env.example` as a template — do not commit
+// sensitive secrets to source control.
 const dotenvCandidates = [path.resolve(process.cwd(), '.env'), path.resolve(process.cwd(), '..', '.env')];
 
 for (const candidate of dotenvCandidates) {
@@ -36,6 +39,8 @@ const paymentMode = (process.env.PAYMENT_MODE as AppEnv['PAYMENT_MODE']) || 'moc
 
 const requiredVars = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'JWT_SECRET'];
 
+// Fail fast when required environment variables are missing. This prevents
+// the server from starting in a badly configured state.
 for (const key of requiredVars) {
   if (!process.env[key]) {
     throw new Error(`Missing required environment variable: ${key}`);

@@ -2,6 +2,9 @@ import type { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
 import * as authService from './auth.service';
 
+// Controller layer: validate input, delegate to the service layer, and
+// translate results to HTTP responses. Keep controllers thin — move
+// business logic into `auth.service` for testability.
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
   try {
     const errors = validationResult(req);
@@ -26,5 +29,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 };
 
 export const logout = async (_req: Request, res: Response): Promise<Response> => {
+  // Stateless logout: client should drop token. Server-side token blacklists
+  // would be implemented here if required.
   return res.status(200).json({ success: true, message: 'Logged out successfully' });
 };

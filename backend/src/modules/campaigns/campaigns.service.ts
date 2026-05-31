@@ -1,3 +1,5 @@
+// Service layer for campaign-related database operations. Prefer prepared SQL
+// and centralized queries here; controllers should only call these functions.
 import pool from '../../config/db';
 
 export type CampaignStatus = 'pending' | 'approved' | 'active' | 'closed' | 'rejected' | 'suspended';
@@ -63,6 +65,8 @@ type CampaignRow = {
 
 type ServiceError = Error & { statusCode?: number };
 
+// Normalize supporting document payloads coming from forms or uploaded
+// artifacts. Returns a clean string[] of URLs.
 const normalizeDocuments = (value: unknown): string[] => {
   if (Array.isArray(value)) {
     return value
@@ -95,6 +99,7 @@ const normalizeDocuments = (value: unknown): string[] => {
   return [];
 };
 
+// Ensure uploaded document urls are trimmed and non-empty.
 const normalizeUploadedDocumentUrls = (value: string[] | undefined): string[] =>
   (value ?? []).map((document) => String(document).trim()).filter(Boolean);
 

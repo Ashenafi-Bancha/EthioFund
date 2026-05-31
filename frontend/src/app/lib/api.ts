@@ -1,3 +1,5 @@
+// API helper: centralizes base URL and request helper so headers and error
+// handling are consistently applied across the frontend.
 const rawApiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export const apiBaseUrl = rawApiBaseUrl.replace(/\/$/, '');

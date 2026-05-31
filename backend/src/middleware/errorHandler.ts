@@ -5,14 +5,18 @@ type AppError = Error & {
   code?: string;
 };
 
+// Centralized error handler for the API. Maps common Postgres and JWT
+// errors to friendly HTTP responses and ensures a consistent JSON shape.
 export const errorHandler = (err: AppError, _req: Request, res: Response, _next: NextFunction): Response => {
   void _next;
   console.error('Error:', err);
 
+  // Handle unique constraint violations (Postgres error code 23505)
   if (err.code === '23505') {
     return res.status(409).json({ success: false, message: 'Duplicate value violates unique constraint' });
   }
 
+  // JWT-specific errors forwarded as 401 to prompt re-authentication.
   if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
     return res.status(401).json({ success: false, message: 'Invalid authentication token' });
   }

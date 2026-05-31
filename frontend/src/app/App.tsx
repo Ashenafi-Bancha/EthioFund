@@ -41,6 +41,9 @@ function getInitialPage(): string {
   return 'home';
 }
 
+// Top-level SPA container: manages simple client-side navigation state.
+// The application uses a lightweight in-memory page state instead of a
+// full router to keep the demo portable and framework-agnostic.
 function App() {
   const { user, ready, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState<string>(getInitialPage);
