@@ -216,7 +216,7 @@ export const initializeDonationPayment = async (
       last_name: lastName,
       tx_ref: txRef,
       callback_url: `${env.SERVER_URL}/api/payments/webhook/chapa`,
-      return_url: `${env.SERVER_URL}/api/payments/verify?tx_ref=${encodeURIComponent(txRef)}`,
+      return_url: `${clientOrigin}/payment-success?tx_ref=${encodeURIComponent(txRef)}`,
       customization: {
         title: 'EthioFund Donate',
         description: chapaDescription,

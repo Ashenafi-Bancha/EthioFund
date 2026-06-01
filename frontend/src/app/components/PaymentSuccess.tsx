@@ -1,4 +1,6 @@
-import { CheckCircle2, Home, LayoutDashboard } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCircle2, Home, LayoutDashboard, Loader2 } from 'lucide-react';
+import { apiRequest } from '../lib/api';
 
 interface PaymentSuccessProps {
   onNavigate: (page: string) => void;
@@ -6,6 +8,58 @@ interface PaymentSuccessProps {
 
 export function PaymentSuccess({ onNavigate }: PaymentSuccessProps) {
   const txRef = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tx_ref') : null;
+  const [checking, setChecking] = useState(Boolean(txRef));
+  const [message, setMessage] = useState('Your donation has been verified and recorded. You can safely close this page or continue to your dashboard.');
+
+  useEffect(() => {
+    if (!txRef) {
+      setChecking(false);
+      setMessage('We could not find a transaction reference. If Chapa already completed the payment, return to the campaign and refresh the status.');
+      return;
+    }
+
+    let cancelled = false;
+
+    const verifyPayment = async () => {
+      try {
+        const response = await apiRequest<{ success: boolean; result?: { status?: 'success' | 'failed' | 'cancelled' | 'pending' } }>(
+          `/payments/verify?tx_ref=${encodeURIComponent(txRef)}`,
+          { method: 'POST' }
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        const status = response.result?.status;
+        if (status === 'failed' || status === 'cancelled') {
+          onNavigate('payment-failed');
+          return;
+        }
+
+        if (status === 'pending') {
+          onNavigate('payment-pending');
+          return;
+        }
+
+        setMessage('Your donation has been verified and recorded. You can safely close this page or continue to your dashboard.');
+      } catch {
+        if (!cancelled) {
+          setMessage('The payment could not be verified right now. Please refresh this page or check the campaign again in a moment.');
+        }
+      } finally {
+        if (!cancelled) {
+          setChecking(false);
+        }
+      }
+    };
+
+    void verifyPayment();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onNavigate, txRef]);
 
   return (
     <section className="mx-auto w-full max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
@@ -16,9 +70,7 @@ export function PaymentSuccess({ onNavigate }: PaymentSuccessProps) {
           </div>
 
           <h1 className="mt-6 text-center text-3xl font-bold text-gray-900">Payment successful</h1>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-gray-600">
-            Your donation has been verified and recorded. You can safely close this page or continue to your dashboard.
-          </p>
+          <p className="mx-auto mt-3 max-w-2xl text-center text-gray-600">{message}</p>
 
           {txRef ? (
             <div className="mx-auto mt-6 w-full max-w-2xl rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 shadow-sm">
@@ -33,8 +85,8 @@ export function PaymentSuccess({ onNavigate }: PaymentSuccessProps) {
             onClick={() => onNavigate('donor-dashboard')}
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 py-3 font-semibold text-white transition hover:bg-green-700"
           >
-            <LayoutDashboard className="h-4 w-4" />
-            View Dashboard
+            {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <LayoutDashboard className="h-4 w-4" />}
+            {checking ? 'Verifying payment...' : 'View Dashboard'}
           </button>
           <button
             type="button"

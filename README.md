@@ -158,7 +158,7 @@ The pgAdmin connection is preconfigured to point at the Docker PostgreSQL servic
 - `backend/.env.example` contains host-development defaults for the API.
 - `frontend/.env.example` contains the frontend API URL example.
 
-For Docker, the defaults are intentionally safe and beginner-friendly. The stack runs in mock payment mode by default so it does not require real Chapa credentials just to boot.
+For Docker, the defaults are intentionally safe and beginner-friendly. The stack runs in real payment mode by default, so you should provide valid Chapa credentials when starting it.
 
 ## Project Structure
 

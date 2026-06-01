@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 
-const campaignUploadsDir = path.resolve(__dirname, '../../uploads/campaign-assets');
+const campaignUploadsDir = path.resolve(process.cwd(), 'uploads', 'campaign-assets');
 
 fs.mkdirSync(campaignUploadsDir, { recursive: true });
 
