@@ -35,19 +35,25 @@ type PublicUser = {
   role: string;
 };
 
+type RegisteredUser = PublicUser & {
+  phone_number: string;
+  status: string;
+  created_at: string;
+};
+
 type ServiceError = Error & { statusCode?: number };
 
 export const register = async ({ full_name, email, phone_number, password, role = 'donor' }: RegisterInput) => {
   if (role === 'admin') {
-    const error: ServiceError = new Error('Self-registration as admin is not allowed');
-    error.statusCode = 403;
+    const error: ServiceError = new Error('Cannot self-register as admin');
+    error.statusCode = 400;
     throw error;
   }
 
   const exists = await pool.query<{ user_id: string }>('SELECT user_id FROM users WHERE email = $1', [email]);
   if ((exists.rowCount || 0) > 0) {
     const error: ServiceError = new Error('Email already registered');
-    error.statusCode = 409;
+    error.statusCode = 400;
     throw error;
   }
 
@@ -59,11 +65,31 @@ export const register = async ({ full_name, email, phone_number, password, role 
     [full_name, email, phone_number, password_hash, role]
   );
 
-  return result.rows[0];
+  const user = result.rows[0];
+  const token = jwt.sign(
+    { userId: user.user_id, role: user.role, email: user.email },
+    env.JWT_SECRET,
+    { expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'] }
+  );
+
+  const publicUser: RegisteredUser = {
+    id: user.user_id,
+    full_name: user.full_name,
+    email: user.email,
+    phone_number: user.phone_number,
+    role: user.role,
+    status: user.status,
+    created_at: user.created_at,
+  };
+
+  return { token, user: publicUser };
 };
 
 export const login = async ({ email, password }: LoginInput): Promise<{ token: string; user: PublicUser }> => {
-  const result = await pool.query<DbUser>('SELECT * FROM users WHERE email = $1', [email]);
+  const result = await pool.query<DbUser>(
+    'SELECT user_id, full_name, email, phone_number, password_hash, role, status, created_at FROM users WHERE email = $1',
+    [email]
+  );
   if ((result.rowCount || 0) === 0) {
     const error: ServiceError = new Error('Invalid credentials');
     error.statusCode = 401;
@@ -79,7 +105,7 @@ export const login = async ({ email, password }: LoginInput): Promise<{ token: s
   }
 
   if (user.status === 'suspended') {
-    const error: ServiceError = new Error('Your account has been suspended');
+    const error: ServiceError = new Error('Account suspended. Contact support.');
     error.statusCode = 403;
     throw error;
   }

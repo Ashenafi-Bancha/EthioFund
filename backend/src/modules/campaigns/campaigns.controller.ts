@@ -1,14 +1,29 @@
 import type { NextFunction, Request, Response } from 'express';
 import { validationResult } from 'express-validator';
+import env from '../../config/env';
 import * as campaignsService from './campaigns.service';
 
 const readCampaignId = (req: Request) => req.params.id || req.params.campaign_id || req.body.campaign_id;
+
+const mapCampaign = (campaign: Record<string, unknown>) => {
+  const campaignId = Number(campaign.campaign_id);
+  return {
+    ...campaign,
+    campaignId,
+    organizerId: campaign.organizer_id,
+    organizerName: campaign.organizer_name,
+    goalAmount: Number(campaign.goal_amount),
+    raisedAmount: Number(campaign.raised_amount),
+    createdAt: campaign.created_at,
+    shareUrl: `${env.CLIENT_URL}/campaigns/${campaignId}`,
+  };
+};
 
 export const createCampaign = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
+      return res.status(400).json({ success: false, message: errors.array()[0]?.msg, errors: errors.array() });
     }
 
     if (!req.user) {
@@ -23,15 +38,11 @@ export const createCampaign = async (req: Request, res: Response, next: NextFunc
     const campaignImageFile = !Array.isArray(uploadedFiles) ? uploadedFiles?.campaign_image?.[0] : undefined;
     const documentFiles = !Array.isArray(uploadedFiles) ? uploadedFiles?.supporting_documents ?? [] : [];
 
-    if (!campaignImageFile) {
-      return res.status(400).json({ success: false, message: 'Campaign image is required' });
-    }
-
     const uploadedImageUrl = campaignImageFile ? `/uploads/campaign-assets/${campaignImageFile.filename}` : undefined;
     const uploadedDocuments = documentFiles.map((file) => `/uploads/campaign-assets/${file.filename}`);
 
     const campaign = await campaignsService.createCampaign(req.user.userId, req.body, uploadedImageUrl, uploadedDocuments);
-    return res.status(201).json({ success: true, campaign });
+    return res.status(201).json({ success: true, data: mapCampaign(campaign as Record<string, unknown>) });
   } catch (error) {
     console.error('Failed to create campaign:', error);
     return next(error);
@@ -47,7 +58,7 @@ export const getAllCampaigns = async (req: Request, res: Response, next: NextFun
       organizerId: typeof req.query.organizer_id === 'string' ? req.query.organizer_id : undefined,
     });
 
-    return res.status(200).json({ success: true, campaigns });
+    return res.status(200).json({ success: true, data: campaigns.map((campaign) => mapCampaign(campaign as Record<string, unknown>)) });
   } catch (error) {
     return next(error);
   }
@@ -73,7 +84,7 @@ export const getCampaignById = async (req: Request, res: Response, next: NextFun
       return res.status(404).json({ success: false, message: 'Campaign not found' });
     }
 
-    return res.status(200).json({ success: true, campaign });
+    return res.status(200).json({ success: true, data: mapCampaign(campaign as Record<string, unknown>) });
   } catch (error) {
     return next(error);
   }
@@ -81,6 +92,11 @@ export const getCampaignById = async (req: Request, res: Response, next: NextFun
 
 export const updateCampaign = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0]?.msg, errors: errors.array() });
+    }
+
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
@@ -90,7 +106,7 @@ export const updateCampaign = async (req: Request, res: Response, next: NextFunc
       return res.status(404).json({ success: false, message: 'Campaign not found' });
     }
 
-    return res.status(200).json({ success: true, campaign });
+    return res.status(200).json({ success: true, data: mapCampaign(campaign as Record<string, unknown>) });
   } catch (error) {
     return next(error);
   }
@@ -115,12 +131,26 @@ export const deleteCampaign = async (req: Request, res: Response, next: NextFunc
 
 export const addCampaignUpdate = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0]?.msg, errors: errors.array() });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
     const update = await campaignsService.addCampaignUpdate({
       campaign_id: String(readCampaignId(req)),
+      organizer_id: req.user.userId,
       content: req.body.content,
     });
 
-    return res.status(201).json({ success: true, update });
+    if (!update) {
+      return res.status(404).json({ success: false, message: 'Campaign not found' });
+    }
+
+    return res.status(201).json({ success: true, data: update });
   } catch (error) {
     return next(error);
   }
@@ -166,7 +196,46 @@ export const adminReviewCampaign = async (req: Request, res: Response, next: Nex
       return res.status(404).json({ success: false, message: 'Campaign not found' });
     }
 
-    return res.status(200).json({ success: true, campaign });
+    return res.status(200).json({ success: true, data: mapCampaign(campaign as Record<string, unknown>) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const approveCampaign = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const campaign = await campaignsService.adminReviewCampaign(String(req.params.id), 'approved');
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: 'Campaign not found' });
+    }
+
+    return res.status(200).json({ success: true, data: mapCampaign(campaign as Record<string, unknown>) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const rejectCampaign = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const campaign = await campaignsService.adminReviewCampaign(String(req.params.id), 'rejected');
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: 'Campaign not found' });
+    }
+
+    return res.status(200).json({ success: true, data: mapCampaign(campaign as Record<string, unknown>) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const suspendCampaign = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const campaign = await campaignsService.adminReviewCampaign(String(req.params.id), 'suspended');
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: 'Campaign not found' });
+    }
+
+    return res.status(200).json({ success: true, data: mapCampaign(campaign as Record<string, unknown>) });
   } catch (error) {
     return next(error);
   }

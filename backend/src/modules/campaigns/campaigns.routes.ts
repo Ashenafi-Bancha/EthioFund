@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import { verifyToken } from '../../middleware/auth';
 import { authorize } from '../../middleware/authorize';
 import { uploadCampaignAssets } from './campaignUploads';
+import { logActivity } from '../../middleware/activityLogger';
 import * as controller from './campaigns.controller';
 
 const router = express.Router();
@@ -16,18 +17,20 @@ router.get('/:campaign_id/milestones', controller.getMilestones);
 router.post(
   '/',
   verifyToken,
-  authorize('organizer', 'admin'),
+  authorize('organizer'),
   uploadCampaignAssets.fields([
     { name: 'campaign_image', maxCount: 1 },
     { name: 'supporting_documents', maxCount: 8 },
   ]),
   [
-    body('title').trim().notEmpty().withMessage('Title is required'),
-    body('title').isLength({ max: 150 }).withMessage('Title must be 150 characters or fewer'),
-    body('description').trim().notEmpty().withMessage('Description is required'),
+    body('title').trim().notEmpty().withMessage('Campaign title is required'),
+    body('title').isLength({ max: 150 }).withMessage('Title cannot exceed 150 characters'),
+    body('description').trim().notEmpty().withMessage('Campaign description is required'),
     body('description').isLength({ max: 10000 }).withMessage('Description is too long'),
-    body('goal_amount').isFloat({ min: 1 }).withMessage('Goal amount is required'),
-    body('category').isIn(['medical', 'education', 'funeral', 'emergency', 'community']).withMessage('Invalid category'),
+    body('goal_amount').isFloat({ gt: 0 }).withMessage('Goal amount must be greater than 0'),
+    body('category')
+      .isIn(['medical', 'education', 'funeral', 'emergency', 'community'])
+      .withMessage('Invalid campaign category'),
     body('location').optional().isString().isLength({ max: 120 }).withMessage('Location must be 120 characters or fewer'),
     body('story').optional().isString(),
     body('image_url').optional().isString(),
@@ -36,10 +39,25 @@ router.post(
   controller.createCampaign
 );
 
-router.put('/:id', verifyToken, controller.updateCampaign);
+router.put(
+  '/:id',
+  verifyToken,
+  authorize('organizer'),
+  [body('title').optional().trim().notEmpty().withMessage('Campaign title is required')],
+  controller.updateCampaign
+);
 router.delete('/:id', verifyToken, controller.deleteCampaign);
-router.post('/updates', verifyToken, controller.addCampaignUpdate);
+router.post(
+  '/:id/updates',
+  verifyToken,
+  authorize('organizer'),
+  [body('content').trim().notEmpty().withMessage('Update content is required')],
+  controller.addCampaignUpdate
+);
 router.post('/milestones', verifyToken, controller.addMilestone);
 router.post('/:id/share', controller.recordCampaignShare);
+router.patch('/:id/approve', verifyToken, authorize('admin'), logActivity('Approved campaign'), controller.approveCampaign);
+router.patch('/:id/reject', verifyToken, authorize('admin'), logActivity('Rejected campaign'), controller.rejectCampaign);
+router.patch('/:id/suspend', verifyToken, authorize('admin'), logActivity('Suspended campaign'), controller.suspendCampaign);
 
 export default router;
