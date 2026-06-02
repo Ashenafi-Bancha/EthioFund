@@ -208,3 +208,39 @@ export const updateContactMessageStatus = async (req: Request, res: Response, ne
     return next(error);
   }
 };
+
+export const getAnalyticsOverview = async (_req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const data = await adminService.getAnalyticsOverview();
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getDonationsByMonth = async (_req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const data = await adminService.getDonationsByMonth();
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getCampaignStatusBreakdown = async (_req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const data = await adminService.getCampaignStatusBreakdown();
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getCommentModerationBreakdown = async (_req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
+  try {
+    const data = await adminService.getCommentModerationBreakdown();
+    return res.status(200).json({ success: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};

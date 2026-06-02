@@ -131,3 +131,76 @@ export const getActivityLogs = async (limit = 100) => {
 
   return result.rows;
 };
+
+export const getAnalyticsOverview = async () => {
+  const [users, campaigns, donations, comments, activeCampaigns, pendingComments] = await Promise.all([
+    pool.query('SELECT COUNT(*)::int AS count FROM users'),
+    pool.query('SELECT COUNT(*)::int AS count FROM campaigns'),
+    pool.query(`SELECT COUNT(*)::int AS count FROM donations WHERE payment_status = 'successful'`),
+    pool.query('SELECT COUNT(*)::int AS count FROM comments'),
+    pool.query(`SELECT COUNT(*)::int AS count FROM campaigns WHERE status = 'active'`),
+    pool.query(`SELECT COUNT(*)::int AS count FROM comments WHERE moderation_status = 'pending_review'`),
+  ]);
+
+  return {
+    totalUsers: users.rows[0].count,
+    totalCampaigns: campaigns.rows[0].count,
+    totalDonations: donations.rows[0].count,
+    totalComments: comments.rows[0].count,
+    activeCampaigns: activeCampaigns.rows[0].count,
+    pendingComments: pendingComments.rows[0].count,
+  };
+};
+
+export const getDonationsByMonth = async (months = 6) => {
+  const limitMonths = Number.isFinite(Number(months)) ? Math.max(1, Math.min(24, Number(months))) : 6;
+
+  const result = await pool.query<{
+    month: string;
+    total_amount: string | number;
+  }>(
+    `
+    SELECT to_char(date_trunc('month', d.donation_date), 'YYYY-MM') AS month,
+           COALESCE(SUM(d.amount), 0)::float AS total_amount
+    FROM donations d
+    WHERE d.payment_status = 'successful'
+      AND d.donation_date >= (date_trunc('month', NOW()) - ($1::int - 1) * INTERVAL '1 month')
+    GROUP BY 1
+    ORDER BY 1
+    `,
+    [limitMonths]
+  );
+
+  return result.rows.map((row) => ({
+    month: row.month,
+    totalAmount: Number(row.total_amount) || 0,
+  }));
+};
+
+export const getCampaignStatusBreakdown = async () => {
+  const result = await pool.query<{ status: string; count: number }>(
+    `SELECT status, COUNT(*)::int AS count
+     FROM campaigns
+     GROUP BY status
+     ORDER BY status`
+  );
+
+  return result.rows.map((row) => ({
+    status: row.status,
+    count: row.count,
+  }));
+};
+
+export const getCommentModerationBreakdown = async () => {
+  const result = await pool.query<{ moderation_status: string; count: number }>(
+    `SELECT moderation_status, COUNT(*)::int AS count
+     FROM comments
+     GROUP BY moderation_status
+     ORDER BY moderation_status`
+  );
+
+  return result.rows.map((row) => ({
+    status: row.moderation_status,
+    count: row.count,
+  }));
+};

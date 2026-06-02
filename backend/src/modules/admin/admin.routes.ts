@@ -25,4 +25,10 @@ router.get('/activity-logs', controller.getActivityLogs);
 router.get('/contact-messages', controller.getContactMessages);
 router.patch('/contact-messages/:id/status', controller.updateContactMessageStatus);
 
+// Analytics (lightweight, read-only)
+router.get('/analytics/overview', controller.getAnalyticsOverview);
+router.get('/analytics/donations-by-month', controller.getDonationsByMonth);
+router.get('/analytics/campaign-status', controller.getCampaignStatusBreakdown);
+router.get('/analytics/comment-moderation', controller.getCommentModerationBreakdown);
+
 export default router;

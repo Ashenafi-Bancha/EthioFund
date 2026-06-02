@@ -9,6 +9,30 @@ export interface AdminStatsResponse {
   withdrawals: number;
 }
 
+export interface AdminAnalyticsOverview {
+  totalUsers: number;
+  totalCampaigns: number;
+  totalDonations: number;
+  totalComments: number;
+  activeCampaigns: number;
+  pendingComments: number;
+}
+
+export type DonationsByMonthRow = {
+  month: string;
+  totalAmount: number;
+};
+
+export type CampaignStatusRow = {
+  status: string;
+  count: number;
+};
+
+export type CommentModerationRow = {
+  status: string;
+  count: number;
+};
+
 export interface PendingCampaignResponse {
   id: string;
   title: string;
@@ -70,6 +94,34 @@ interface UseAdminStatsResult {
   stats: AdminStatsResponse | null;
   loading: boolean;
   error: string | null;
+}
+
+interface UseAdminAnalyticsOverviewResult {
+  overview: AdminAnalyticsOverview | null;
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+interface UseDonationsByMonthResult {
+  rows: DonationsByMonthRow[];
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+interface UseCampaignStatusAnalyticsResult {
+  rows: CampaignStatusRow[];
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+interface UseCommentModerationAnalyticsResult {
+  rows: CommentModerationRow[];
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
 }
 
 interface UsePendingCampaignsResult {
@@ -155,6 +207,126 @@ export const useAdminStats = (): UseAdminStatsResult => {
   }, [token]);
 
   return { stats, loading, error };
+};
+
+export const useAdminAnalyticsOverview = (): UseAdminAnalyticsOverviewResult => {
+  const { token } = useAuth();
+  const [overview, setOverview] = useState<AdminAnalyticsOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiRequest<{ success?: boolean; data?: AdminAnalyticsOverview }>('/admin/analytics/overview', {
+          authToken: token,
+        });
+        setOverview(response.data ?? null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch analytics overview');
+        setOverview(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void fetchOverview();
+  }, [token, refreshIndex]);
+
+  return { overview, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
+};
+
+export const useDonationsByMonth = (): UseDonationsByMonthResult => {
+  const { token } = useAuth();
+  const [rows, setRows] = useState<DonationsByMonthRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchRows = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiRequest<{ success?: boolean; data?: DonationsByMonthRow[] }>('/admin/analytics/donations-by-month', {
+          authToken: token,
+        });
+        setRows(response.data ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch donation trends');
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void fetchRows();
+  }, [token, refreshIndex]);
+
+  return { rows, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
+};
+
+export const useCampaignStatusAnalytics = (): UseCampaignStatusAnalyticsResult => {
+  const { token } = useAuth();
+  const [rows, setRows] = useState<CampaignStatusRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchRows = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiRequest<{ success?: boolean; data?: CampaignStatusRow[] }>('/admin/analytics/campaign-status', {
+          authToken: token,
+        });
+        setRows(response.data ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch campaign status analytics');
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void fetchRows();
+  }, [token, refreshIndex]);
+
+  return { rows, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
+};
+
+export const useCommentModerationAnalytics = (): UseCommentModerationAnalyticsResult => {
+  const { token } = useAuth();
+  const [rows, setRows] = useState<CommentModerationRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchRows = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await apiRequest<{ success?: boolean; data?: CommentModerationRow[] }>('/admin/analytics/comment-moderation', {
+          authToken: token,
+        });
+        setRows(response.data ?? []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch comment moderation analytics');
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void fetchRows();
+  }, [token, refreshIndex]);
+
+  return { rows, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
 };
 
 /**

@@ -13,7 +13,7 @@ This is the recommended path for teams and new contributors. It is the default z
 ```bash
 git clone https://github.com/Ashenafi-Bancha/EthioFund
 cd ethiofund
-docker compose up
+docker compose up --build
 ```
 
 That starts:
@@ -22,6 +22,7 @@ That starts:
 - Backend API with automatic database wait, migration, and seed bootstrap
 - Frontend dev server with hot reload
 - pgAdmin for visual database access
+- Persistent campaign/media uploads at `backend/uploads` (`uploads/campaigns` and `uploads/documents`)
 
 Open these URLs after startup:
 
@@ -52,24 +53,35 @@ Clone the repository and install dependencies:
 
 ```bash
 git clone https://github.com/Ashenafi-Bancha/EthioFund
-cd ethiofund/backend
-pnpm install
-cd ../frontend
-pnpm install
+cd ethiofund
+cd backend && pnpm install
+cd ../frontend && pnpm install
+```
+
+Or from the repository root (npm workspace path):
+
+```bash
+cd ethiofund
+npm install
+npm run dev
 ```
 
 Set up environment files:
 
 ```bash
-copy ..\.env.example ..\.env
+cd ethiofund
 copy .env.example .env
+copy backend\.env.example backend\.env
+copy frontend\.env.example frontend\.env
 ```
 
 If you are using PowerShell, you can also run:
 
 ```powershell
-Copy-Item ..\.env.example ..\.env
+cd ethiofund
 Copy-Item .env.example .env
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env
 ```
 
 Create the database if it does not already exist:
@@ -113,6 +125,7 @@ Local URLs:
 - Frontend dev server with hot reload
 - Backend API with hot reload
 - PostgreSQL with persistent Docker volume
+- Campaign image and supporting document upload persistence (`backend/uploads`, `/uploads/campaigns`, `/uploads/documents`)
 - Database readiness check before backend start
 - Schema creation
 - Demo data seeding
@@ -157,6 +170,7 @@ The pgAdmin connection is preconfigured to point at the Docker PostgreSQL servic
 - `.env.example` at the repo root contains Docker-friendly defaults.
 - `backend/.env.example` contains host-development defaults for the API.
 - `frontend/.env.example` contains the frontend API URL example.
+- Backend env includes variables used by recent features (Gemini moderation, JWT auth, payment mode).
 
 For Docker, the defaults are intentionally safe and beginner-friendly. The stack runs in real payment mode by default, so you should provide valid Chapa credentials when starting it.
 
@@ -241,7 +255,8 @@ ethiofund/
 - Campaign creation, moderation, and verification
 - Donation tracking and payment integration
 - Activity logging and reporting
-- Comment moderation
+- Gemini-assisted comment moderation with admin override workflow
+- Admin analytics dashboard (including Recharts-based visualizations)
 - Campaign updates and withdrawal management
 - PostgreSQL-backed persistence
 

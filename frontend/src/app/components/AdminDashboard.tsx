@@ -3,6 +3,10 @@ import { CheckCircle, XCircle, Clock, Eye, Users, FileText, Loader, Mail, Archiv
 import { toast } from 'sonner';
 import {
   useAdminStats,
+  useAdminAnalyticsOverview,
+  useDonationsByMonth,
+  useCampaignStatusAnalytics,
+  useCommentModerationAnalytics,
   usePendingCampaigns,
   usePendingWithdrawals,
   useApproveCampaign,
@@ -16,6 +20,18 @@ import {
   useUpdateContactMessageStatus,
 } from '../hooks/useAdmin';
 import { useAuth } from '../context/AuthContext';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts';
 
 interface AdminDashboardProps {
   onViewCampaign: (campaignId: string) => void;
@@ -24,6 +40,10 @@ interface AdminDashboardProps {
 export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
   const { user } = useAuth();
   const { stats, loading: statsLoading } = useAdminStats();
+  const { overview: analyticsOverview, loading: overviewLoading } = useAdminAnalyticsOverview();
+  const { rows: donationTrendRows, loading: donationTrendLoading } = useDonationsByMonth();
+  const { rows: campaignStatusRows, loading: campaignStatusLoading } = useCampaignStatusAnalytics();
+  const { rows: commentModerationRows, loading: commentModerationLoading } = useCommentModerationAnalytics();
   const { campaigns: pendingCampaigns, loading: campaignsLoading, reload: reloadCampaigns } = usePendingCampaigns();
   const { withdrawals: pendingWithdrawals, loading: withdrawalsLoading, reload: reloadWithdrawals } = usePendingWithdrawals();
   const { comments: pendingComments, loading: commentsLoading, reload: reloadPendingComments } = usePendingComments();
@@ -67,6 +87,12 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
   if (!user || user.role !== 'admin') {
     return null;
   }
+
+  const cardButtonClass =
+    'rounded-2xl bg-white p-6 shadow-md transition hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-green-500 text-left';
+
+  const chartCardClass = 'rounded-2xl bg-white p-6 shadow-md';
+  const pieColors = ['#16a34a', '#f97316', '#ef4444', '#3b82f6', '#a855f7', '#64748b'];
 
   const handleApprove = async (campaignId: string) => {
     const ok = await approveCampaign(campaignId);
@@ -150,7 +176,18 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
               { label: 'Successful donations', value: stats?.donations ?? 0, icon: CheckCircle },
               { label: 'Withdrawals', value: stats?.withdrawals ?? 0, icon: Clock },
             ].map((stat) => (
-              <div key={stat.label} className="rounded-2xl bg-white p-6 shadow-md">
+              <button
+                key={stat.label}
+                type="button"
+                className={cardButtonClass}
+                onClick={() => {
+                  if (stat.label === 'Users') setActiveTab('overview');
+                  if (stat.label === 'Campaigns') setActiveTab('campaigns');
+                  if (stat.label === 'Successful donations') setActiveTab('overview');
+                  if (stat.label === 'Withdrawals') setActiveTab('withdrawals');
+                }}
+                aria-label={`Open ${stat.label}`}
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="rounded-xl bg-gray-50 p-3">
                     <stat.icon className="h-6 w-6 text-gray-700" />
@@ -158,7 +195,7 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
                 </div>
                 <div className="mb-1 text-3xl font-bold text-gray-900">{stat.value.toLocaleString()}</div>
                 <div className="text-sm text-gray-600">{stat.label}</div>
-              </div>
+              </button>
             ))
           )}
         </div>
@@ -217,22 +254,151 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
 
           <div className="p-6">
             {activeTab === 'overview' && (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl bg-green-50 p-5">
-                  <div className="text-sm text-green-700">Users</div>
-                  <div className="mt-1 text-3xl font-bold text-green-900">{stats?.users ?? 0}</div>
+              <div className="space-y-6">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <button type="button" onClick={() => setActiveTab('overview')} className="rounded-2xl bg-green-50 p-5 text-left transition hover:shadow-sm">
+                    <div className="text-sm text-green-700">Total users</div>
+                    <div className="mt-1 text-3xl font-bold text-green-900">{analyticsOverview?.totalUsers ?? stats?.users ?? 0}</div>
+                  </button>
+                  <button type="button" onClick={() => setActiveTab('campaigns')} className="rounded-2xl bg-blue-50 p-5 text-left transition hover:shadow-sm">
+                    <div className="text-sm text-blue-700">Total campaigns</div>
+                    <div className="mt-1 text-3xl font-bold text-blue-900">{analyticsOverview?.totalCampaigns ?? stats?.campaigns ?? 0}</div>
+                  </button>
+                  <button type="button" onClick={() => setActiveTab('overview')} className="rounded-2xl bg-purple-50 p-5 text-left transition hover:shadow-sm">
+                    <div className="text-sm text-purple-700">Successful donations</div>
+                    <div className="mt-1 text-3xl font-bold text-purple-900">{analyticsOverview?.totalDonations ?? stats?.donations ?? 0}</div>
+                  </button>
+                  <button type="button" onClick={() => setActiveTab('comments')} className="rounded-2xl bg-orange-50 p-5 text-left transition hover:shadow-sm">
+                    <div className="text-sm text-orange-700">Total comments</div>
+                    <div className="mt-1 text-3xl font-bold text-orange-900">{analyticsOverview?.totalComments ?? 0}</div>
+                    <div className="mt-2 text-xs text-orange-700/90">Pending review: {analyticsOverview?.pendingComments ?? pendingComments.length}</div>
+                  </button>
                 </div>
-                <div className="rounded-2xl bg-blue-50 p-5">
-                  <div className="text-sm text-blue-700">Campaigns</div>
-                  <div className="mt-1 text-3xl font-bold text-blue-900">{stats?.campaigns ?? 0}</div>
+
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className={chartCardClass}>
+                    <div className="mb-1 text-lg font-semibold text-gray-900">Donation Trends</div>
+                    <div className="text-sm text-gray-600">Successful donations (last months)</div>
+                    <div className="mt-4 h-64">
+                      {donationTrendLoading ? (
+                        <div className="flex h-full items-center justify-center gap-2 text-gray-500">
+                          <Loader className="h-4 w-4 animate-spin" />
+                          Loading chart...
+                        </div>
+                      ) : donationTrendRows.length === 0 ? (
+                        <div className="flex h-full items-center justify-center text-sm text-gray-500">No donation data yet.</div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={donationTrendRows}>
+                            <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip />
+                            <Line type="monotone" dataKey="totalAmount" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <div className={chartCardClass}>
+                      <div className="mb-1 text-lg font-semibold text-gray-900">Campaign Status</div>
+                      <div className="text-sm text-gray-600">Distribution</div>
+                      <div className="mt-4 h-64">
+                        {campaignStatusLoading ? (
+                          <div className="flex h-full items-center justify-center gap-2 text-gray-500">
+                            <Loader className="h-4 w-4 animate-spin" />
+                            Loading chart...
+                          </div>
+                        ) : campaignStatusRows.length === 0 ? (
+                          <div className="flex h-full items-center justify-center text-sm text-gray-500">No campaign data.</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={campaignStatusRows} dataKey="count" nameKey="status" outerRadius={80}>
+                                {campaignStatusRows.map((_, index) => (
+                                  <Cell key={index} fill={pieColors[index % pieColors.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={chartCardClass}>
+                      <div className="mb-1 text-lg font-semibold text-gray-900">Comment Moderation</div>
+                      <div className="text-sm text-gray-600">Gemini workflow</div>
+                      <div className="mt-4 h-64">
+                        {commentModerationLoading ? (
+                          <div className="flex h-full items-center justify-center gap-2 text-gray-500">
+                            <Loader className="h-4 w-4 animate-spin" />
+                            Loading chart...
+                          </div>
+                        ) : commentModerationRows.length === 0 ? (
+                          <div className="flex h-full items-center justify-center text-sm text-gray-500">No comments yet.</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={commentModerationRows} dataKey="count" nameKey="status" outerRadius={80}>
+                                {commentModerationRows.map((_, index) => (
+                                  <Cell key={index} fill={pieColors[index % pieColors.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="rounded-2xl bg-purple-50 p-5">
-                  <div className="text-sm text-purple-700">Successful donations</div>
-                  <div className="mt-1 text-3xl font-bold text-purple-900">{stats?.donations ?? 0}</div>
-                </div>
-                <div className="rounded-2xl bg-orange-50 p-5">
-                  <div className="text-sm text-orange-700">Withdrawals</div>
-                  <div className="mt-1 text-3xl font-bold text-orange-900">{stats?.withdrawals ?? 0}</div>
+
+                <div className={chartCardClass}>
+                  <div className="mb-4 flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-lg font-semibold text-gray-900">Recent Activities</div>
+                      <div className="text-sm text-gray-600">Last 10 actions recorded by the platform</div>
+                    </div>
+                    {(overviewLoading || logsLoading) && (
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <Loader className="h-4 w-4 animate-spin" />
+                        Loading...
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-gray-200">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Time</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Actor</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 bg-white">
+                        {activityLogs.slice(0, 10).length > 0 ? (
+                          activityLogs.slice(0, 10).map((log) => (
+                            <tr key={log.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-sm text-gray-700">{new Date(log.timestamp).toLocaleString()}</td>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900">{log.user_name ?? 'System'}</td>
+                              <td className="px-4 py-3 text-sm text-gray-700">{log.activity}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={3} className="px-4 py-8 text-center text-sm text-gray-500">
+                              No activities yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             )}
