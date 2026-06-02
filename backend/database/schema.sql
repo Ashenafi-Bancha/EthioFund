@@ -121,9 +121,36 @@ CREATE TABLE IF NOT EXISTS comments (
   moderation_status VARCHAR(20) NOT NULL DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'pending_review', 'rejected')),
   moderation_reason TEXT,
   moderation_score DECIMAL(4,3),
+  gemini_decision VARCHAR(30),
+  gemini_reasoning TEXT,
+  gemini_confidence DECIMAL(4,3),
+  gemini_model VARCHAR(80),
+  reviewed_by INT REFERENCES users(user_id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMP,
   moderated_at TIMESTAMP DEFAULT NOW(),
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE comments
+ADD COLUMN IF NOT EXISTS gemini_decision VARCHAR(30);
+
+ALTER TABLE comments
+ADD COLUMN IF NOT EXISTS gemini_reasoning TEXT;
+
+ALTER TABLE comments
+ADD COLUMN IF NOT EXISTS gemini_confidence DECIMAL(4,3);
+
+ALTER TABLE comments
+ADD COLUMN IF NOT EXISTS gemini_model VARCHAR(80);
+
+ALTER TABLE comments
+ADD COLUMN IF NOT EXISTS reviewed_by INT REFERENCES users(user_id) ON DELETE SET NULL;
+
+ALTER TABLE comments
+ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP;
+
+CREATE INDEX IF NOT EXISTS idx_comments_campaign_status ON comments(campaign_id, moderation_status);
+CREATE INDEX IF NOT EXISTS idx_comments_status_created_at ON comments(moderation_status, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS withdrawals (
   withdrawal_id SERIAL PRIMARY KEY,

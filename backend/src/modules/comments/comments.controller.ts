@@ -19,20 +19,22 @@ export const addComment = async (req: Request, res: Response, next: NextFunction
       return res.status(500).json({ success: false, message: 'Failed to save comment' });
     }
 
-    // TC-13 Step 4: Rejected comments are saved to DB (hidden from public), return 202
+    // REJECTED comments are saved to DB (hidden from public), return 202
     if (result.rejected) {
       return res.status(202).json({
         success: true,
-        message: 'Your comment did not pass moderation and will not be shown publicly.',
+        message: 'Your comment could not be posted because it violates community guidelines.',
         comment: result.comment,
         moderation: result.moderation,
         pendingReview: false,
+        rejected: true,
       });
     }
 
     if (result.moderation.decision === 'approved') {
       return res.status(201).json({
         success: true,
+        message: 'Your comment has been posted successfully.',
         data: result.comment,
         moderation: result.moderation,
       });
@@ -41,7 +43,7 @@ export const addComment = async (req: Request, res: Response, next: NextFunction
     return res.status(202).json({
       success: true,
       data: result.comment,
-      message: 'Comment submitted for review',
+      message: 'Your comment is being reviewed by an administrator before posting.',
       moderation: result.moderation,
       pendingReview: true,
     });

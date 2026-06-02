@@ -16,10 +16,35 @@ export const addComment = async (userId: string, campaignId: string, content: st
       : 'pending_review';
 
   const result = await pool.query(
-    `INSERT INTO comments (content, user_id, campaign_id, moderation_status, moderation_reason, moderation_score, moderated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, NOW())
-     RETURNING comment_id, content, user_id, campaign_id, moderation_status, moderation_reason, moderation_score, moderated_at, created_at`,
-    [content, userId, campaignId, moderationStatus, moderation.reason, moderation.score]
+    `INSERT INTO comments (
+       content,
+       user_id,
+       campaign_id,
+       moderation_status,
+       moderation_reason,
+       moderation_score,
+       gemini_decision,
+       gemini_reasoning,
+       gemini_confidence,
+       gemini_model,
+       moderated_at
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+     RETURNING comment_id, content, user_id, campaign_id, moderation_status, moderation_reason, moderation_score,
+               gemini_decision, gemini_reasoning, gemini_confidence, gemini_model,
+               reviewed_by, reviewed_at, moderated_at, created_at`,
+    [
+      content,
+      userId,
+      campaignId,
+      moderationStatus,
+      moderation.reason,
+      moderation.score,
+      moderation.geminiDecision,
+      moderation.reason,
+      moderation.score,
+      moderation.model,
+    ]
   );
 
   const commentRow = result.rows[0] || null;
@@ -77,7 +102,10 @@ export const deleteComment = async (commentId: string, userId: string, role: str
 
 export const getPendingComments = async () => {
   const result = await pool.query(
-    `SELECT c.comment_id, c.content, c.user_id, c.campaign_id, c.moderation_status, c.moderation_reason, c.moderation_score, c.moderated_at, c.created_at,
+    `SELECT c.comment_id, c.content, c.user_id, c.campaign_id, c.moderation_status, c.moderation_reason, c.moderation_score,
+            c.gemini_decision, c.gemini_reasoning, c.gemini_confidence, c.gemini_model,
+            c.reviewed_by, c.reviewed_at,
+            c.moderated_at, c.created_at,
             u.full_name AS user_name, cp.title AS campaign_title
      FROM comments c
      LEFT JOIN users u ON u.user_id = c.user_id
@@ -91,7 +119,10 @@ export const getPendingComments = async () => {
 
 export const getAllCommentsForAdmin = async () => {
   const result = await pool.query(
-    `SELECT c.comment_id, c.content, c.user_id, c.campaign_id, c.moderation_status, c.moderation_reason, c.moderation_score, c.moderated_at, c.created_at,
+    `SELECT c.comment_id, c.content, c.user_id, c.campaign_id, c.moderation_status, c.moderation_reason, c.moderation_score,
+            c.gemini_decision, c.gemini_reasoning, c.gemini_confidence, c.gemini_model,
+            c.reviewed_by, c.reviewed_at,
+            c.moderated_at, c.created_at,
             u.full_name AS user_name, cp.title AS campaign_title
      FROM comments c
      LEFT JOIN users u ON u.user_id = c.user_id
@@ -115,10 +146,14 @@ export const reviewComment = async (
     `UPDATE comments
      SET moderation_status = $1,
          moderation_reason = COALESCE($2, $3, moderation_reason),
+         reviewed_by = $4,
+         reviewed_at = NOW(),
          moderated_at = NOW()
-     WHERE comment_id = $4
-     RETURNING comment_id, content, user_id, campaign_id, moderation_status, moderation_reason, moderation_score, moderated_at, created_at`,
-    [normalizedDecision, reason ?? null, defaultReason, commentId]
+     WHERE comment_id = $5
+     RETURNING comment_id, content, user_id, campaign_id, moderation_status, moderation_reason, moderation_score,
+               gemini_decision, gemini_reasoning, gemini_confidence, gemini_model,
+               reviewed_by, reviewed_at, moderated_at, created_at`,
+    [normalizedDecision, reason ?? null, defaultReason, reviewedByUserId ?? null, commentId]
   );
 
   const comment = result.rows[0] || null;

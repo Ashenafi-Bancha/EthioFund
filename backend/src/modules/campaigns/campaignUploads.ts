@@ -2,13 +2,16 @@ import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 
-const campaignUploadsDir = path.resolve(process.cwd(), 'uploads', 'campaign-assets');
+const uploadsRootDir = path.resolve(process.cwd(), 'uploads');
+const campaignUploadsDir = path.resolve(uploadsRootDir, 'campaigns');
+const documentUploadsDir = path.resolve(uploadsRootDir, 'documents');
 
 fs.mkdirSync(campaignUploadsDir, { recursive: true });
+fs.mkdirSync(documentUploadsDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (_req, _file, callback) => {
-    callback(null, campaignUploadsDir);
+    callback(null, _file.fieldname === 'supporting_documents' ? documentUploadsDir : campaignUploadsDir);
   },
   filename: (_req, file, callback) => {
     const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');

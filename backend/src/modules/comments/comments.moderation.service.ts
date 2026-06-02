@@ -5,6 +5,7 @@ export type CommentModerationDecision = 'approved' | 'pending_review' | 'rejecte
 
 export type CommentModerationResult = {
   decision: CommentModerationDecision;
+  geminiDecision: 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW';
   reason: string;
   score: number;
   model: string;
@@ -26,20 +27,6 @@ const normalizeScore = (value: unknown): number => {
   return Math.max(0, Math.min(1, score));
 };
 
-const mapDecision = (value: unknown): CommentModerationDecision => {
-  const decision = String(value || '').toLowerCase().trim();
-
-  if (decision === 'approve' || decision === 'approved' || decision === 'allow' || decision === 'allowed') {
-    return 'approved';
-  }
-
-  if (decision === 'reject' || decision === 'rejected' || decision === 'block' || decision === 'blocked') {
-    return 'rejected';
-  }
-
-  return 'pending_review';
-};
-
 const extractJsonObject = (text: string): GeminiModerationPayload => {
   const match = text.match(/\{[\s\S]*\}/);
 
@@ -58,6 +45,7 @@ export const moderateCommentContent = async (content: string): Promise<CommentMo
   if (!env.GEMINI_API_KEY) {
     return {
       decision: 'pending_review',
+      geminiDecision: 'PENDING_REVIEW',
       reason: 'Gemini API key is not configured. Comment queued for manual review.',
       score: 0.5,
       model,
@@ -69,11 +57,13 @@ export const moderateCommentContent = async (content: string): Promise<CommentMo
     // We explicitly ask for a specific JSON shape without markdown formatting/backticks to ease parsing.
     const prompt = [
       'You are a strict moderation classifier for campaign comments on a crowdfunding platform.',
-      'Classify the comment into one of these decisions: approved, pending_review, rejected.',
-      'Reject spam, scams, hateful content, harassment, explicit sexual content, threats, and obvious abuse.',
-      'Use pending_review for ambiguous, suspicious, or low-confidence comments.',
+      'Return one of these decisions ONLY: APPROVED, REJECTED, PENDING_REVIEW.',
+      'APPROVED: positive/supportive/encouraging/constructive feedback (including polite criticism).',
+      'REJECTED: hateful/abusive/harassment/threats/violent incitement/scams/spam/doxxing/explicit sexual content.',
+      'PENDING_REVIEW: ambiguous, mixed sentiment, borderline language, uncertainty, or low confidence.',
+      'IMPORTANT: Do NOT reject constructive feedback or polite disagreement. If unsure, choose PENDING_REVIEW.',
       'Return JSON only with this exact shape:',
-      '{"decision":"approved|pending_review|rejected","reason":"short explanation","confidence":0.0}',
+      '{"decision":"APPROVED|REJECTED|PENDING_REVIEW","reason":"short explanation","confidence":0.0}',
       'No markdown, no code fences, and no extra keys.',
       '',
       `Comment: ${content}`,
@@ -115,10 +105,32 @@ export const moderateCommentContent = async (content: string): Promise<CommentMo
     // Attempt to extract the JSON block out of the generated string using regex and parse it
     const parsed = extractJsonObject(text);
 
+    const rawDecision = String(parsed.decision || '').toUpperCase().trim();
+    const geminiDecision: 'APPROVED' | 'REJECTED' | 'PENDING_REVIEW' =
+      rawDecision === 'APPROVED' ? 'APPROVED' : rawDecision === 'REJECTED' ? 'REJECTED' : 'PENDING_REVIEW';
+
+    const confidence = normalizeScore(parsed.confidence ?? parsed.score);
+
+    // Confidence-aware moderation guardrails:
+    // - Low confidence => PENDING_REVIEW
+    // - Avoid false rejections: require higher confidence to auto-reject
+    const decision: CommentModerationDecision = (() => {
+      if (geminiDecision === 'APPROVED') {
+        return confidence >= 0.7 ? 'approved' : 'pending_review';
+      }
+
+      if (geminiDecision === 'REJECTED') {
+        return confidence >= 0.85 ? 'rejected' : 'pending_review';
+      }
+
+      return 'pending_review';
+    })();
+
     return {
-      decision: mapDecision(parsed.decision),
+      decision,
+      geminiDecision,
       reason: String(parsed.reason || 'Comment reviewed by Gemini moderation'),
-      score: normalizeScore(parsed.confidence ?? parsed.score),
+      score: confidence,
       model,
     };
   } catch (error) {
@@ -128,6 +140,7 @@ export const moderateCommentContent = async (content: string): Promise<CommentMo
 
     return {
       decision: 'pending_review',
+      geminiDecision: 'PENDING_REVIEW',
       reason: `Moderation service unavailable: ${reason}`,
       score: 0.5,
       model,

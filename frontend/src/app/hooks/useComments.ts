@@ -45,7 +45,7 @@ interface UseCommentsResult {
 interface UseAddCommentResult {
   loading: boolean;
   error: string | null;
-  addComment: (data: CreateCommentInput) => Promise<{ comment: CommentResponse; pendingReview: boolean } | null>;
+  addComment: (data: CreateCommentInput) => Promise<{ comment: CommentResponse; status: 'approved' | 'pending_review' | 'rejected' } | null>;
 }
 
 /**
@@ -92,11 +92,19 @@ export const useAddComment = (): UseAddCommentResult => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const addComment = async (data: CreateCommentInput): Promise<{ comment: CommentResponse; pendingReview: boolean } | null> => {
+  const addComment = async (
+    data: CreateCommentInput
+  ): Promise<{ comment: CommentResponse; status: 'approved' | 'pending_review' | 'rejected' } | null> => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiRequest<{ success?: boolean; comment?: CommentApiRow; moderation?: { decision?: string } }>('/comments', {
+      const response = await apiRequest<{
+        success?: boolean;
+        comment?: CommentApiRow;
+        data?: CommentApiRow;
+        moderation?: { decision?: string };
+        rejected?: boolean;
+      }>('/comments', {
         method: 'POST',
         authToken: token,
         body: JSON.stringify({
@@ -104,13 +112,18 @@ export const useAddComment = (): UseAddCommentResult => {
           content: data.message,
         }),
       });
-      if (!response.comment) {
+      const row = response.data ?? response.comment;
+      if (!row) {
         return null;
       }
 
+      const decision = String(response.moderation?.decision ?? '').toLowerCase();
+      const status: 'approved' | 'pending_review' | 'rejected' =
+        response.rejected ? 'rejected' : decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 'pending_review';
+
       return {
-        comment: normalizeComment(response.comment),
-        pendingReview: response.moderation?.decision === 'pending_review',
+        comment: normalizeComment(row),
+        status,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add comment';

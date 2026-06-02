@@ -203,6 +203,38 @@ Content-Type: application/json
 { "campaign_id": 1, "content": "This is an amazing campaign. Wishing Alem a speedy recovery!" }
 
 ###
+# TC-13 Extra: Constructive feedback (should be APPROVED, or PENDING if uncertain)
+POST {{baseUrl}}/comments
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "content": "I support this cause. One suggestion: add a clearer breakdown of how the funds will be used so donors can trust the plan." }
+
+###
+# TC-13 Extra: Spam/scam (should be REJECTED)
+POST {{baseUrl}}/comments
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "content": "Earn ETB fast! Click http://spam.example and send your bank details for instant payout!!!" }
+
+###
+# TC-13 Extra: Offensive/abusive (should be REJECTED)
+POST {{baseUrl}}/comments
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "content": "You are disgusting and this is a scam. I hope you fail." }
+
+###
+# TC-13 Extra: Ambiguous/mixed sentiment (should be PENDING_REVIEW)
+POST {{baseUrl}}/comments
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "content": "Not sure about this. If it's real, I wish you well, but something feels off." }
+
+###
 # TC-13 Step 5: Public views approved comments → 200
 GET {{baseUrl}}/comments/campaign/1
 

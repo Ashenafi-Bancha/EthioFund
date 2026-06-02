@@ -70,9 +70,6 @@ const isMockPaymentMode = () => {
   return env.CHAPA_SECRET_KEY?.startsWith('CHASECK_TEST-') ?? true;
 };
 
-const buildMockCheckoutUrl = (txRef: string) =>
-  `${env.CLIENT_URL.replace(/\/$/, '')}/payment/success?tx_ref=${encodeURIComponent(txRef)}&mode=mock`;
-
 const getRedirectBaseUrl = (payment: { client_origin?: string | null } | null | undefined): string =>
   String(payment?.client_origin || env.CLIENT_URL || '').trim().replace(/\/$/, '');
 

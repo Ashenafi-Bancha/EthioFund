@@ -66,10 +66,12 @@ export function CampaignDetail({ campaignId, onBack, backLabel = 'Back' }: Campa
       });
       if (result) {
         setNewComment('');
-        if (result.pendingReview) {
-          toast.success('Comment submitted for moderation review.');
+        if (result.status === 'approved') {
+          toast.success('Your comment has been posted successfully.');
+        } else if (result.status === 'rejected') {
+          toast.error('Your comment could not be posted because it violates community guidelines.');
         } else {
-          toast.success('Comment posted successfully!');
+          toast.success('Your comment is being reviewed by an administrator before posting.');
         }
       } else {
         toast.error('Failed to post comment. Please try again.');

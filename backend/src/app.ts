@@ -55,7 +55,7 @@ const respondToHealthCheck = async (_req: express.Request, res: express.Response
   try {
     await pingDatabase();
     res.json({ status: 'OK', database: 'Connected' });
-  } catch (_error) {
+  } catch {
     res.status(503).json({ status: 'OK', database: 'Disconnected' });
   }
 };

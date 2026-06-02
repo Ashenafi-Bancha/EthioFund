@@ -41,8 +41,8 @@ export const createCampaign = async (req: Request, res: Response, next: NextFunc
     const campaignImageFile = !Array.isArray(uploadedFiles) ? uploadedFiles?.campaign_image?.[0] : undefined;
     const documentFiles = !Array.isArray(uploadedFiles) ? uploadedFiles?.supporting_documents ?? [] : [];
 
-    const uploadedImageUrl = campaignImageFile ? `/uploads/campaign-assets/${campaignImageFile.filename}` : undefined;
-    const uploadedDocuments = documentFiles.map((file) => `/uploads/campaign-assets/${file.filename}`);
+    const uploadedImageUrl = campaignImageFile ? `/uploads/campaigns/${campaignImageFile.filename}` : undefined;
+    const uploadedDocuments = documentFiles.map((file) => `/uploads/documents/${file.filename}`);
 
     const campaign = await campaignsService.createCampaign(req.user.userId, req.body, uploadedImageUrl, uploadedDocuments);
     return res.status(201).json({ success: true, data: mapCampaign(campaign as Record<string, unknown>) });
