@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { X, Facebook, Twitter, Mail, Link as LinkIcon, MessageCircle, Check, Send } from 'lucide-react';
+import {
+  X,
+  Facebook,
+  Twitter,
+  Mail,
+  Link as LinkIcon,
+  MessageCircle,
+  Check,
+  Send,
+  ArrowLeft,
+  Share2,
+  ChevronDown,
+} from 'lucide-react';
 import type { CampaignResponse } from '../hooks/useCampaigns';
 import { toast } from 'sonner';
 import { apiRequest } from '../lib/api';
@@ -12,61 +24,57 @@ interface ShareCampaignModalProps {
 
 export function ShareCampaignModal({ campaign, onClose, onShare }: ShareCampaignModalProps) {
   const [copied, setCopied] = useState(false);
+  const [showExtras, setShowExtras] = useState(false);
 
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://ethiofund.com';
-  const campaignUrl = `${origin}/campaign/${campaign.id}`;
+  const campaignUrl = campaign.share_url || `${origin}/campaigns/${campaign.id}`;
   const shareText = `${campaign.title} — ${campaign.description}`;
 
-  const handleCopyLink = () => {
-    // Try modern Clipboard API first
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(campaignUrl)
-        .then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 2000);
-          void recordShare('copy_link');
-        })
-        .catch(() => {
-          // Fallback to older method
-          fallbackCopyTextToClipboard(campaignUrl);
-        });
-    } else {
-      // Use fallback for browsers that don't support Clipboard API
-      fallbackCopyTextToClipboard(campaignUrl);
+  const handleCopyLink = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(campaignUrl);
+      } else {
+        fallbackCopy(campaignUrl);
+        return;
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success('Link copied');
+      void recordShare('copy_link');
+    } catch {
+      fallbackCopy(campaignUrl);
     }
   };
 
-  const fallbackCopyTextToClipboard = (text: string) => {
+  const fallbackCopy = (text: string) => {
     const textArea = document.createElement('textarea');
     textArea.value = text;
     textArea.style.position = 'fixed';
-    textArea.style.left = '-999999px';
-    textArea.style.top = '-999999px';
+    textArea.style.left = '-9999px';
     document.body.appendChild(textArea);
-    textArea.focus();
     textArea.select();
-    
     try {
       document.execCommand('copy');
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast.success('Link copied');
       void recordShare('copy_link');
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
-      toast.error('Copy failed. Please manually copy the link from the field.');
+    } catch {
+      toast.error('Could not copy link');
     }
-    
     document.body.removeChild(textArea);
   };
 
   const recordShare = async (provider?: string) => {
     try {
-      // Fire-and-forget to backend to increment share count
-      await apiRequest(`/campaigns/${campaign.id}/share`, { method: 'POST', body: JSON.stringify({ provider }) });
-      if (typeof onShare === 'function') onShare();
-    } catch (err) {
-      // Don't block the user; log error
-      console.warn('Failed to record share', err);
+      await apiRequest(`/campaigns/${campaign.id}/share`, {
+        method: 'POST',
+        body: JSON.stringify({ provider }),
+      });
+      onShare?.();
+    } catch {
+      console.warn('Failed to record share');
     }
   };
 
@@ -74,203 +82,201 @@ export function ShareCampaignModal({ campaign, onClose, onShare }: ShareCampaign
     {
       name: 'Facebook',
       icon: Facebook,
-      color: 'bg-blue-600 hover:bg-blue-700',
-      url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(campaignUrl)}`
+      color: 'bg-[#1877F2]',
+      url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(campaignUrl)}`,
     },
     {
-      name: 'Twitter',
+      name: 'X',
       icon: Twitter,
-      color: 'bg-sky-500 hover:bg-sky-600',
-      url: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(campaignUrl)}`
+      color: 'bg-sky-500',
+      url: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(campaignUrl)}`,
     },
     {
       name: 'WhatsApp',
       icon: MessageCircle,
-      color: 'bg-green-600 hover:bg-green-700',
-      url: `https://wa.me/?text=${encodeURIComponent(shareText + ' ' + campaignUrl)}`
+      color: 'bg-[#25D366]',
+      url: `https://wa.me/?text=${encodeURIComponent(`${shareText} ${campaignUrl}`)}`,
     },
     {
       name: 'Telegram',
       icon: Send,
-      color: 'bg-blue-500 hover:bg-blue-600',
-      url: `https://t.me/share/url?url=${encodeURIComponent(campaignUrl)}&text=${encodeURIComponent(shareText)}`
+      color: 'bg-[#0088cc]',
+      url: `https://t.me/share/url?url=${encodeURIComponent(campaignUrl)}&text=${encodeURIComponent(shareText)}`,
     },
     {
       name: 'Email',
       icon: Mail,
-      color: 'bg-gray-600 hover:bg-gray-700',
-      url: `mailto:?subject=${encodeURIComponent(campaign.title)}&body=${encodeURIComponent(shareText + '\n\n' + campaignUrl)}`
-    }
+      color: 'bg-gray-600',
+      url: `mailto:?subject=${encodeURIComponent(campaign.title)}&body=${encodeURIComponent(`${shareText}\n\n${campaignUrl}`)}`,
+    },
   ];
 
+  const handleNativeShare = async () => {
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    if (!nav.share) {
+      await handleCopyLink();
+      return;
+    }
+    try {
+      await nav.share({ title: campaign.title, text: shareText, url: campaignUrl });
+      void recordShare('native');
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        toast.error('Share cancelled or unavailable');
+      }
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-md w-full">
-        {/* Header */}
-        <div className="border-b px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900">Share Campaign</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="share-modal-title"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[min(92dvh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100"
           >
-            <X className="w-5 h-5" />
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+          <h2 id="share-modal-title" className="text-base font-semibold text-gray-900">
+            Share campaign
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-6">
-          {/* Campaign Info */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-semibold text-gray-900 mb-1">{campaign.title}</h3>
-            <p className="text-sm text-gray-600 line-clamp-2">{campaign.description}</p>
-          </div>
-
-          {/* Share Buttons */}
-          <div className="space-y-3 mb-6">
-            <p className="text-sm font-semibold text-gray-700">Share via</p>
-            <div className="grid grid-cols-2 gap-3">
-              {shareLinks.map((link) => (
-                <a
-                  key={link.name}
-                  href={link.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => void recordShare(link.name.toLowerCase())}
-                  className={`${link.color} text-white p-4 rounded-lg transition-all flex items-center gap-3 hover:shadow-md`}
-                >
-                  <link.icon className="w-5 h-5" />
-                  <span className="font-semibold">{link.name}</span>
-                </a>
-              ))}
-
-              {/* Native share (if available) and Instagram fallback */}
-              {typeof navigator !== 'undefined' && (navigator as any).share ? (
-                <button
-                  onClick={() => {
-                    (navigator as any)
-                      .share({
-                        title: campaign.title,
-                        text: shareText,
-                        url: campaignUrl,
-                      })
-                      .then(() => void recordShare('native'))
-                      .catch(() => {
-                        toast.error('Unable to open share sheet');
-                      });
-                  }}
-                  className="col-span-2 bg-gray-900 text-white p-4 rounded-lg flex items-center gap-3 justify-center hover:opacity-95"
-                >
-                  <LinkIcon className="w-5 h-5" />
-                  <span className="font-semibold">Share...</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    // Instagram has no web share endpoint — instruct user to copy link
-                    handleCopyLink();
-                    toast.success('Link copied — paste into Instagram to share');
-                    void recordShare('instagram');
-                  }}
-                  className="col-span-2 bg-pink-600 text-white p-4 rounded-lg flex items-center gap-3 justify-center hover:opacity-95"
-                >
-                  <Send className="w-5 h-5" />
-                  <span className="font-semibold">Share to Instagram (copy link)</span>
-                </button>
-              )}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+          <div className="mb-4 flex gap-3 rounded-xl bg-gray-50 p-3">
+            <img
+              src={campaign.image_url}
+              alt=""
+              className="h-14 w-14 shrink-0 rounded-lg object-cover"
+            />
+            <div className="min-w-0">
+              <p className="line-clamp-2 text-sm font-semibold text-gray-900">{campaign.title}</p>
+              <p className="mt-0.5 line-clamp-1 text-xs text-gray-500">{campaign.description}</p>
             </div>
           </div>
 
-          {/* Copy Link */}
-          <div className="mb-4">
-            <p className="text-sm font-semibold text-gray-700 mb-2">Or copy link</p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={campaignUrl}
-                readOnly
-                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-sm"
-              />
-              <button
-                onClick={handleCopyLink}
-                className={`px-6 py-3 rounded-lg transition-all ${
-                  copied
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+          <button
+            type="button"
+            onClick={() => void handleCopyLink()}
+            className={`mb-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-colors ${
+              copied ? 'bg-green-600 text-white' : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
+          >
+            {copied ? <Check className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
+            {copied ? 'Copied!' : 'Copy campaign link'}
+          </button>
+
+          {typeof navigator !== 'undefined' && (navigator as Navigator & { share?: unknown }).share ? (
+            <button
+              type="button"
+              onClick={() => void handleNativeShare()}
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+            >
+              <Share2 className="h-4 w-4" />
+              Share via device
+            </button>
+          ) : null}
+
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Share on</p>
+          <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {shareLinks.map((link) => (
+              <a
+                key={link.name}
+                href={link.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => void recordShare(link.name.toLowerCase())}
+                className={`flex min-w-[4.5rem] flex-col items-center gap-1.5 rounded-xl px-3 py-3 text-white transition-opacity hover:opacity-90 ${link.color}`}
               >
-                {copied ? (
-                  <Check className="w-5 h-5" />
-                ) : (
-                  <LinkIcon className="w-5 h-5" />
-                )}
-              </button>
+                <link.icon className="h-5 w-5" />
+                <span className="text-[10px] font-semibold">{link.name}</span>
+              </a>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowExtras((open) => !open)}
+            className="mt-4 flex w-full items-center justify-between rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            More options
+            <ChevronDown className={`h-4 w-4 transition-transform ${showExtras ? 'rotate-180' : ''}`} />
+          </button>
+
+          {showExtras && (
+            <div className="mt-3 space-y-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <EmbedSnippet
+                campaignId={campaign.id}
+                origin={origin}
+                onEmbedCopy={() => void recordShare('embed')}
+              />
+              <p className="text-xs leading-relaxed text-gray-600">
+                Sharing helps this campaign reach more supporters. Every share can bring new donors.
+              </p>
             </div>
-            {copied && (
-              <p className="text-xs text-green-600 mt-2">Link copied to clipboard!</p>
-            )}
-          </div>
-
-          {/* Embed Snippet */}
-          <div className="mb-4">
-            <p className="text-sm font-semibold text-gray-700 mb-2">Embed this campaign</p>
-            <EmbedSnippet campaignId={campaign.id} origin={origin} onEmbedCopy={() => void recordShare('embed')} />
-          </div>
-
-          {/* Impact Message */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-gray-700">
-              <span className="font-semibold">💡 Did you know?</span> Campaigns that are shared on social media raise up to 5x more than those that aren't. Help spread the word!
-            </p>
-          </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function EmbedSnippet({ campaignId, origin, onEmbedCopy }: { campaignId: string; origin: string; onEmbedCopy?: () => void }) {
-  const [showCode, setShowCode] = useState(false);
+function EmbedSnippet({
+  campaignId,
+  origin,
+  onEmbedCopy,
+}: {
+  campaignId: string;
+  origin: string;
+  onEmbedCopy?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
-
   const embedSrc = `${origin}/embed/campaign/${campaignId}`;
-  const code = `<iframe src="${embedSrc}" width="600" height="400" frameborder="0" loading="lazy" style="border:0;border-radius:8px;"></iframe>`;
+  const code = `<iframe src="${embedSrc}" width="100%" height="360" style="border:0;border-radius:12px;max-width:480px;" loading="lazy" title="EthioFund campaign"></iframe>`;
 
-  const copyCode = () => {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(code).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-        if (onEmbedCopy) onEmbedCopy();
-      });
-    } else {
-      const ta = document.createElement('textarea');
-      ta.value = code;
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand('copy');
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-        if (onEmbedCopy) onEmbedCopy();
-      } catch {
-        // fallback
-      }
-      document.body.removeChild(ta);
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      onEmbedCopy?.();
+      toast.success('Embed code copied');
+    } catch {
+      toast.error('Could not copy embed code');
     }
   };
 
   return (
     <div>
-      <div className="flex items-center gap-2">
-        <button onClick={() => setShowCode((s) => !s)} className="px-4 py-2 bg-gray-100 rounded-md text-sm">
-          {showCode ? 'Hide embed' : 'Show embed code'}
-        </button>
-        <button onClick={copyCode} className={`px-4 py-2 rounded-md text-sm ${copied ? 'bg-green-600 text-white' : 'bg-gray-50'}`}>
-          {copied ? 'Copied' : 'Copy embed'}
-        </button>
-      </div>
-      {showCode && (
-        <textarea readOnly className="mt-3 w-full h-28 p-3 text-xs font-mono bg-gray-100 rounded-md" value={code} />
-      )}
+      <p className="mb-2 text-xs font-semibold text-gray-700">Embed on your site</p>
+      <button
+        type="button"
+        onClick={() => void copyCode()}
+        className={`w-full rounded-lg py-2 text-xs font-semibold ${
+          copied ? 'bg-green-600 text-white' : 'bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-100'
+        }`}
+      >
+        {copied ? 'Copied embed code' : 'Copy embed code'}
+      </button>
     </div>
   );
 }

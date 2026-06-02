@@ -1,11 +1,14 @@
 import { Facebook, Twitter, Instagram, Mail, Phone, MapPin, ArrowRight } from 'lucide-react';
+import type { User } from '../types/auth';
 
 interface FooterProps {
   onNavigate: (page: string) => void;
+  currentUser?: User | null;
 }
 
-export function Footer({ onNavigate }: FooterProps) {
+export function Footer({ onNavigate, currentUser }: FooterProps) {
   const currentYear = new Date().getFullYear();
+  const showContactLink = currentUser?.role !== 'admin';
 
   return (
     <footer className="border-t border-gray-200 bg-[#071014] text-gray-300">
@@ -35,7 +38,9 @@ export function Footer({ onNavigate }: FooterProps) {
               <button type="button" onClick={() => onNavigate('home')} className="block text-left text-gray-400 transition-colors hover:text-white">Home</button>
               <button type="button" onClick={() => onNavigate('campaigns')} className="block text-left text-gray-400 transition-colors hover:text-white">Campaigns</button>
               <button type="button" onClick={() => onNavigate('about')} className="block text-left text-gray-400 transition-colors hover:text-white">About</button>
-              <button type="button" onClick={() => onNavigate('contact')} className="block text-left text-gray-400 transition-colors hover:text-white">Contact</button>
+              {showContactLink ? (
+                <button type="button" onClick={() => onNavigate('contact')} className="block text-left text-gray-400 transition-colors hover:text-white">Contact</button>
+              ) : null}
             </div>
           </div>
 

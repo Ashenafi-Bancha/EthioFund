@@ -13,6 +13,7 @@ type AuthContextValue = {
   register: (input: AuthRegisterInput) => Promise<User>;
   logout: () => Promise<void>;
   clearSession: () => void;
+  updateUser: (updatedUser: Partial<User>) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -85,6 +86,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearStoredSession();
   };
 
+  const updateUser = (updatedUser: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const newUser = { ...prev, ...updatedUser };
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(newUser));
+      }
+      return newUser;
+    });
+  };
+
   const setSession = (session: AuthSession) => {
     setUser(session.user);
     setToken(session.token);
@@ -101,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const restoreSession = async () => {
       try {
-        const response = await apiRequest<{ success: boolean; user: ApiUser }>('/users/me', {
+        const response = await apiRequest<{ success: boolean; data?: ApiUser; user?: ApiUser }>('/users/me', {
           authToken: token,
         });
 
@@ -109,7 +121,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setUser(mapApiUser(response.user));
+        const apiUser = response.data ?? response.user;
+        if (apiUser) {
+          setUser(mapApiUser(apiUser));
+        }
       } catch {
         if (!cancelled) {
           clearSession();
@@ -129,21 +144,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [token]);
 
   const login = async ({ email, password }: AuthLoginInput): Promise<User> => {
-    const response = await apiRequest<{ success: boolean; token: string; user: ApiUser }>('/auth/login', {
+    const response = await apiRequest<{ success: boolean; data?: { token: string; user: ApiUser }; token?: string; user?: ApiUser }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
 
-    const mappedUser = mapApiUser(response.user);
-    setSession({ token: response.token, user: mappedUser });
+    const payload = response.data ?? { token: response.token!, user: response.user! };
+    const mappedUser = mapApiUser(payload.user);
+    setSession({ token: payload.token, user: mappedUser });
     return mappedUser;
   };
 
   const register = async ({ full_name, email, phone_number, password, role }: AuthRegisterInput): Promise<User> => {
-    await apiRequest<{ success: boolean; user: ApiUser }>('/auth/register', {
+    const response = await apiRequest<{ success: boolean; data?: { token: string; user: ApiUser } }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ full_name, email, phone_number, password, role }),
     });
+
+    if (response.data?.token && response.data.user) {
+      const mappedUser = mapApiUser(response.data.user);
+      setSession({ token: response.data.token, user: mappedUser });
+      return mappedUser;
+    }
 
     return login({ email, password });
   };
@@ -162,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, token, ready, login, register, logout, clearSession }),
+    () => ({ user, token, ready, login, register, logout, clearSession, updateUser }),
     [ready, token, user]
   );
 

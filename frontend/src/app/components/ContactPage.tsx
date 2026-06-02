@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { ArrowRight, Mail, MapPin, Phone, ShieldCheck, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiRequest } from '../lib/api';
+import { PageBackButton } from './PageBackButton';
 
 interface ContactPageProps {
   onNavigate: (page: string) => void;
+  onBack: () => void;
+  backLabel?: string;
 }
 
-export function ContactPage({ onNavigate }: ContactPageProps) {
+export function ContactPage({ onNavigate, onBack, backLabel = 'Back' }: ContactPageProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -38,6 +41,9 @@ export function ContactPage({ onNavigate }: ContactPageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-16">
+      <div className="mx-auto max-w-7xl">
+        <PageBackButton onBack={onBack} label={backLabel} />
+      </div>
       <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
           <p className="mb-4 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-green-700">Contact us</p>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle, XCircle, Clock, Eye, Users, FileText, Loader } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Eye, Users, FileText, Loader, Mail, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   useAdminStats,
@@ -11,6 +11,9 @@ import {
   useReviewComment,
   useAdminComments,
   useAdminActivityLogs,
+  useUpdateWithdrawalStatus,
+  useContactMessages,
+  useUpdateContactMessageStatus,
 } from '../hooks/useAdmin';
 import { useAuth } from '../context/AuthContext';
 
@@ -22,14 +25,18 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
   const { user } = useAuth();
   const { stats, loading: statsLoading } = useAdminStats();
   const { campaigns: pendingCampaigns, loading: campaignsLoading, reload: reloadCampaigns } = usePendingCampaigns();
-  const { withdrawals: pendingWithdrawals, loading: withdrawalsLoading } = usePendingWithdrawals();
+  const { withdrawals: pendingWithdrawals, loading: withdrawalsLoading, reload: reloadWithdrawals } = usePendingWithdrawals();
   const { comments: pendingComments, loading: commentsLoading, reload: reloadPendingComments } = usePendingComments();
   const { approveCampaign, loading: approvingCampaign } = useApproveCampaign();
   const { rejectCampaign, loading: rejectingCampaign } = useRejectCampaign();
   const { reviewComment, loading: reviewingComment } = useReviewComment();
   const { comments: allComments, loading: allCommentsLoading, reload: reloadAllComments } = useAdminComments();
   const { logs: activityLogs, loading: logsLoading, reload: reloadActivityLogs } = useAdminActivityLogs();
-  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'withdrawals' | 'comments' | 'activity'>('overview');
+  const { updateWithdrawalStatus, loading: updatingWithdrawalStatus } = useUpdateWithdrawalStatus();
+  const { messages: contactMessages, loading: contactMessagesLoading, reload: reloadContactMessages } = useContactMessages();
+  const { updateContactMessageStatus, loading: updatingContactMessage } = useUpdateContactMessageStatus();
+  const [activeTab, setActiveTab] = useState<'overview' | 'campaigns' | 'withdrawals' | 'support' | 'comments' | 'activity'>('overview');
+  const [contactFilter, setContactFilter] = useState<'all' | 'new' | 'read' | 'archived'>('all');
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [overrideDecision, setOverrideDecision] = useState<'approved' | 'rejected'>('approved');
   const [overrideReason, setOverrideReason] = useState('');
@@ -43,6 +50,19 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
   }, [allComments, selectedCommentId]);
 
   const selectedComment = allComments.find((comment) => comment.id === selectedCommentId) ?? null;
+  const newContactCount = contactMessages.filter((message) => message.status === 'new').length;
+  const filteredContactMessages =
+    contactFilter === 'all' ? contactMessages : contactMessages.filter((message) => message.status === contactFilter);
+
+  const handleContactStatusUpdate = async (messageId: string, status: 'new' | 'read' | 'archived') => {
+    const ok = await updateContactMessageStatus(messageId, status);
+    if (ok) {
+      toast.success(`Message marked as ${status}.`);
+      reloadContactMessages();
+    } else {
+      toast.error('Failed to update message status.');
+    }
+  };
 
   if (!user || user.role !== 'admin') {
     return null;
@@ -65,6 +85,17 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
       reloadCampaigns();
     } else {
       toast.error('Failed to reject campaign.');
+    }
+  };
+
+  const handleUpdateWithdrawalStatus = async (withdrawalId: string, status: 'approved' | 'rejected') => {
+    const ok = await updateWithdrawalStatus(withdrawalId, status);
+    if (ok) {
+      toast.success(`Withdrawal request ${status}.`);
+      reloadWithdrawals();
+      reloadActivityLogs();
+    } else {
+      toast.error(`Failed to ${status} withdrawal request.`);
     }
   };
 
@@ -157,6 +188,14 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
               >
                 Withdrawal requests
                 {pendingWithdrawals.length > 0 && <span className="ml-2 rounded-full bg-orange-500 px-2 py-0.5 text-xs text-white">{pendingWithdrawals.length}</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('support')}
+                className={`px-6 py-4 font-semibold whitespace-nowrap transition-colors ${activeTab === 'support' ? 'border-b-2 border-green-600 text-green-600' : 'text-gray-600 hover:text-gray-900'}`}
+              >
+                Support inbox
+                {newContactCount > 0 && <span className="ml-2 rounded-full bg-orange-500 px-2 py-0.5 text-xs text-white">{newContactCount}</span>}
               </button>
               <button
                 type="button"
@@ -277,8 +316,10 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Campaign</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Organizer</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Amount</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Bank Account</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Payout account</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Campaign balance</th>
                         <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -288,18 +329,142 @@ export function AdminDashboard({ onViewCampaign }: AdminDashboardProps) {
                             <td className="px-6 py-4 font-semibold text-gray-900">{withdrawal.campaign_title}</td>
                             <td className="px-6 py-4 text-gray-700">{withdrawal.organizer_name}</td>
                             <td className="px-6 py-4 font-semibold text-gray-900">ETB {withdrawal.amount.toLocaleString()}</td>
-                            <td className="px-6 py-4 text-sm text-gray-700">{withdrawal.bank_account}</td>
+                            <td className="px-6 py-4 text-sm text-gray-700">
+                              <div>{withdrawal.bank_account}</div>
+                              {withdrawal.campaign_bank_account && withdrawal.campaign_bank_account !== withdrawal.bank_account ? (
+                                <div className="mt-1 text-xs text-gray-500">Registered: {withdrawal.campaign_bank_account}</div>
+                              ) : null}
+                            </td>
+                            <td className="px-6 py-4 font-semibold text-gray-900">ETB {withdrawal.raised_amount.toLocaleString()}</td>
                             <td className="px-6 py-4 text-gray-700">{new Date(withdrawal.created_at).toLocaleDateString()}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void handleUpdateWithdrawalStatus(withdrawal.id, 'approved')}
+                                  disabled={updatingWithdrawalStatus}
+                                  className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50 disabled:opacity-50"
+                                  title="Approve Withdrawal"
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleUpdateWithdrawalStatus(withdrawal.id, 'rejected')}
+                                  disabled={updatingWithdrawalStatus}
+                                  className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                                  title="Reject Withdrawal"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={5} className="px-6 py-10 text-center text-gray-500">No pending withdrawals.</td>
+                          <td colSpan={7} className="px-6 py-10 text-center text-gray-500">No pending withdrawals.</td>
                         </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'support' && (
+              <div>
+                <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">Contact form messages</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {(['all', 'new', 'read', 'archived'] as const).map((filter) => (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setContactFilter(filter)}
+                        className={`rounded-full px-3 py-1.5 text-sm font-semibold capitalize transition-colors ${
+                          contactFilter === filter ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {contactMessagesLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-10 text-gray-500">
+                    <Loader className="h-5 w-5 animate-spin" />
+                    Loading messages...
+                  </div>
+                ) : filteredContactMessages.length > 0 ? (
+                  <div className="space-y-4">
+                    {filteredContactMessages.map((message) => (
+                      <div key={message.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 font-semibold text-gray-900">
+                              <Mail className="h-4 w-4 text-green-600" />
+                              {message.name}
+                            </div>
+                            <a href={`mailto:${message.email}`} className="text-sm text-green-700 hover:underline">
+                              {message.email}
+                            </a>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                message.status === 'new'
+                                  ? 'bg-orange-100 text-orange-700'
+                                  : message.status === 'read'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-gray-200 text-gray-700'
+                              }`}
+                            >
+                              {message.status}
+                            </span>
+                            <span className="text-xs text-gray-500">{new Date(message.created_at).toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <p className="mb-4 whitespace-pre-wrap text-gray-700">{message.message}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {message.status !== 'read' && (
+                            <button
+                              type="button"
+                              disabled={updatingContactMessage}
+                              onClick={() => void handleContactStatusUpdate(message.id, 'read')}
+                              className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              Mark read
+                            </button>
+                          )}
+                          {message.status !== 'archived' && (
+                            <button
+                              type="button"
+                              disabled={updatingContactMessage}
+                              onClick={() => void handleContactStatusUpdate(message.id, 'archived')}
+                              className="inline-flex items-center gap-1 rounded-xl bg-gray-700 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
+                            >
+                              <Archive className="h-4 w-4" />
+                              Archive
+                            </button>
+                          )}
+                          {message.status !== 'new' && (
+                            <button
+                              type="button"
+                              disabled={updatingContactMessage}
+                              onClick={() => void handleContactStatusUpdate(message.id, 'new')}
+                              className="rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                            >
+                              Mark as new
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="py-10 text-center text-gray-500">No contact messages in this view.</p>
+                )}
               </div>
             )}
 

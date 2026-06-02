@@ -2,6 +2,7 @@ import axios from 'axios';
 import { randomBytes } from 'crypto';
 import env from '../../config/env';
 import pool from '../../config/db';
+import { recordActivity } from '../../middleware/activityLogger';
 import * as donationsService from '../donations/donations.service';
 
 type ChapaInitializeApiResponse = {
@@ -54,6 +55,7 @@ const chapaClient = axios.create({
     Authorization: `Bearer ${env.CHAPA_SECRET_KEY || ''}`,
     'Content-Type': 'application/json',
   },
+  timeout: 8000,
 });
 
 const isMockPaymentMode = () => {
@@ -69,7 +71,7 @@ const isMockPaymentMode = () => {
 };
 
 const buildMockCheckoutUrl = (txRef: string) =>
-  `${env.CLIENT_URL.replace(/\/$/, '')}/payment-success?tx_ref=${encodeURIComponent(txRef)}&mode=mock`;
+  `${env.CLIENT_URL.replace(/\/$/, '')}/payment/success?tx_ref=${encodeURIComponent(txRef)}&mode=mock`;
 
 const getRedirectBaseUrl = (payment: { client_origin?: string | null } | null | undefined): string =>
   String(payment?.client_origin || env.CLIENT_URL || '').trim().replace(/\/$/, '');
@@ -184,7 +186,7 @@ export const initializeDonationPayment = async (
 
     return {
       txRef,
-      checkoutUrl: `${clientOrigin}/payment-success?tx_ref=${encodeURIComponent(txRef)}&mode=mock`,
+      checkoutUrl: `${clientOrigin}/payment/success?tx_ref=${encodeURIComponent(txRef)}&mode=mock`,
     };
   }
 
@@ -216,7 +218,7 @@ export const initializeDonationPayment = async (
       last_name: lastName,
       tx_ref: txRef,
       callback_url: `${env.SERVER_URL}/api/payments/webhook/chapa`,
-      return_url: `${clientOrigin}/payment-success?tx_ref=${encodeURIComponent(txRef)}`,
+      return_url: `${clientOrigin}/payment/success?tx_ref=${encodeURIComponent(txRef)}`,
       customization: {
         title: 'EthioFund Donate',
         description: chapaDescription,
@@ -243,7 +245,7 @@ export const initializeDonationPayment = async (
     const details = axios.isAxiosError(error) ? JSON.stringify(error.response?.data ?? {}, null, 2) : '';
     console.error(`[payments] initialize failed tx_ref=${txRef}: ${message}${details ? ` | response=${details}` : ''}`);
     const appError = new Error(`Unable to initialize Chapa payment: ${message}`);
-    (appError as Error & { statusCode?: number }).statusCode = 502;
+    (appError as Error & { statusCode?: number }).statusCode = 503;
     throw appError;
   }
 };
@@ -255,6 +257,8 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
     throw error;
   }
 
+  // 1. Initial lookup to see if we already processed this transaction.
+  // This avoids reaching out to Chapa's external API if we have local certainty.
   const existing = await getPaymentByTxRef(txRef);
   if (!existing) {
     const error = new Error('Transaction not found');
@@ -262,6 +266,9 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
     throw error;
   }
 
+  // 2. Idempotency Check:
+  // If the transaction status is already finalized ('success', 'failed', 'cancelled'),
+  // return immediately to prevent redundant database modifications or double-credits.
   if (existing.status !== 'pending') {
     console.info(`[payments] verify idempotent tx_ref=${txRef} status=${existing.status}`);
     return {
@@ -272,13 +279,19 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
     };
   }
 
+  // 3. Verify status with Chapa's external API
   const chapaResult = await verifyWithChapa(txRef);
   const nextStatus = chapaResult.status;
 
+  // 4. Database Transaction with Row Locking (FOR UPDATE):
+  // Since both a user redirect and a Chapa webhook may hit the server simultaneously,
+  // we acquire an exclusive database-level row lock on the payment record.
+  // This guarantees mutual exclusion and serializability.
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
+    // Acquire the lock. If another thread is writing to this row, this query blocks until the other commits.
     const lockResult = await client.query<PaymentRow>(
       'SELECT id, tx_ref, donation_id, campaign_id, client_origin, amount, status FROM payments WHERE tx_ref = $1 FOR UPDATE',
       [txRef]
@@ -290,6 +303,9 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
       throw error;
     }
 
+    // Re-verify the locked status inside the critical section.
+    // If the concurrent thread finished the transaction while we were waiting on the lock,
+    // we bypass writing and return the now-finalized status.
     const locked = lockResult.rows[0];
     if (locked.status !== 'pending') {
       await client.query('COMMIT');
@@ -301,6 +317,7 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
       };
     }
 
+    // 5. Apply the payment status updates locally
     await client.query(
       'UPDATE payments SET status = $1, payment_method = COALESCE($2, payment_method), updated_at = NOW() WHERE tx_ref = $3',
       [nextStatus, chapaResult.paymentMethod || null, txRef]
@@ -311,8 +328,10 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
       txRef,
     ]);
 
+    // 6. Complete the business logic (crediting campaign raised_amount)
     if (locked.donation_id) {
       if (nextStatus === 'success') {
+        // Mark donation successful, ensuring we don't re-apply if already credited.
         const donationUpdate = await client.query<{ amount: string; campaign_id: number }>(
           `UPDATE donations
            SET payment_status = 'successful'
@@ -321,6 +340,7 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
           [locked.donation_id]
         );
 
+        // If the donation row was updated successfully, increment campaign financial records.
         if ((donationUpdate.rowCount || 0) > 0) {
           await client.query(
             `UPDATE campaigns
@@ -329,8 +349,10 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
              WHERE campaign_id = $2`,
             [donationUpdate.rows[0].amount, donationUpdate.rows[0].campaign_id]
           );
+          void recordActivity(null, 'Donation confirm');
         }
       } else if (nextStatus === 'failed' || nextStatus === 'cancelled') {
+        // Handle failed payment states by transitioning the donation to failed
         await client.query(
           `UPDATE donations
            SET payment_status = 'failed'
@@ -349,9 +371,11 @@ export const verifyAndFinalizeTransaction = async (txRef: string): Promise<Verif
       redirectBaseUrl: getRedirectBaseUrl(locked),
     };
   } catch (error) {
+    // Rollback ensures all statements fail atomically on database or runtime error.
     await client.query('ROLLBACK');
     throw error;
   } finally {
+    // Release client back to the pool to prevent resource exhaustion.
     client.release();
   }
 };

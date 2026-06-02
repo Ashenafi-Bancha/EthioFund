@@ -1,34 +1,30 @@
 import type { NextFunction, Request, Response } from 'express';
+import { validationResult } from 'express-validator';
 import env from '../../config/env';
 import * as chapaService from './chapa.service';
 import * as donationsService from '../donations/donations.service';
 
+const paymentSuccessPath = '/payment/success';
+const paymentFailedPath = '/payment/failed';
+
 export const initializePayment = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0]?.msg, errors: errors.array() });
+    }
+
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
     const clientOrigin = String(req.get('origin') || req.body?.client_origin || env.CLIENT_URL || '').trim().replace(/\/$/, '');
 
-    const donationId = Number(req.body?.donation_id || 0);
-
-    if (donationId > 0) {
-      const payment = await chapaService.initializeDonationPayment(donationId, req.user.userId, {
-        email: req.body?.email,
-        firstName: req.body?.first_name,
-        lastName: req.body?.last_name,
-        clientOrigin,
-      });
-
-      return res.status(200).json({ success: true, payment });
-    }
-
     const amount = Number(req.body?.amount || 0);
     const campaignId = String(req.body?.campaign_id || '').trim();
 
     if (!Number.isFinite(amount) || amount <= 0 || !campaignId) {
-      return res.status(400).json({ success: false, message: 'amount and campaign_id are required' });
+      return res.status(400).json({ success: false, message: 'Donation amount must be greater than 0' });
     }
 
     const donation = await donationsService.createDonation(req.user.userId, {
@@ -45,32 +41,50 @@ export const initializePayment = async (req: Request, res: Response, next: NextF
       clientOrigin,
     });
 
-    return res.status(201).json({ success: true, donation, payment });
+    return res.status(200).json({
+      success: true,
+      data: {
+        checkout_url: payment.checkoutUrl,
+        tx_ref: payment.txRef,
+        donation_id: donation.donation_id,
+      },
+    });
   } catch (error) {
+    const err = error as Error & { statusCode?: number };
+    if (err.statusCode === 502 || err.statusCode === 503) {
+      return res.status(503).json({ success: false, message: 'Payment service unavailable' });
+    }
     return next(error);
   }
 };
 
 export const verifyPayment = async (req: Request, res: Response, next: NextFunction): Promise<Response | void> => {
   try {
-    const txRef = String(req.body?.tx_ref || req.query.tx_ref || '').trim();
+    const txRef = String(req.params.tx_ref || req.body?.tx_ref || req.query.tx_ref || '').trim();
     if (!txRef) {
       return res.status(400).json({ success: false, message: 'tx_ref is required' });
     }
 
-    const result = await chapaService.verifyAndFinalizeTransaction(txRef);
+    let result;
+    try {
+      result = await chapaService.verifyAndFinalizeTransaction(txRef);
+    } catch (error) {
+      const err = error as Error & { statusCode?: number };
+      if (req.method === 'GET' && err.statusCode === 404) {
+        const redirectUrl = `${env.CLIENT_URL.replace(/\/$/, '')}${paymentFailedPath}`;
+        return res.redirect(302, redirectUrl);
+      }
+      throw error;
+    }
 
     if (req.method === 'GET') {
-      const path = result.status === 'success'
-        ? '/payment-success'
-        : result.status === 'pending'
-          ? '/payment-pending'
-          : '/payment-failed';
-      const redirectUrl = `${result.redirectBaseUrl || chapaService.getClientBaseUrl()}${path}?tx_ref=${encodeURIComponent(txRef)}`;
+      const base = result.redirectBaseUrl || chapaService.getClientBaseUrl();
+      const path = result.status === 'success' ? paymentSuccessPath : paymentFailedPath;
+      const redirectUrl = `${base.replace(/\/$/, '')}${path}?tx_ref=${encodeURIComponent(txRef)}`;
       return res.redirect(302, redirectUrl);
     }
 
-    return res.status(200).json({ success: true, result });
+    return res.status(200).json({ success: true, data: result });
   } catch (error) {
     return next(error);
   }
@@ -86,7 +100,7 @@ export const chapaWebhook = async (req: Request, res: Response, next: NextFuncti
     }
 
     const result = await chapaService.verifyAndFinalizeTransaction(txRef);
-    return res.status(200).json({ success: true, result });
+    return res.status(200).json({ success: true, data: result });
   } catch (error) {
     return next(error);
   }

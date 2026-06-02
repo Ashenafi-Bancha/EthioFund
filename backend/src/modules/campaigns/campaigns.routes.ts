@@ -35,14 +35,20 @@ router.post(
     body('story').optional().isString(),
     body('image_url').optional().isString(),
     body('duration_days').optional().isInt({ min: 1 }).withMessage('Duration must be a positive integer'),
+    body('bank_account').trim().notEmpty().withMessage('Bank account is required for payout'),
+    body('payout_phone')
+      .trim()
+      .isLength({ min: 10, max: 13 })
+      .withMessage('Enter a valid payout phone number'),
   ],
+  logActivity('Created campaign'),
   controller.createCampaign
 );
 
 router.put(
   '/:id',
   verifyToken,
-  authorize('organizer'),
+  authorize('organizer', 'admin'),
   [body('title').optional().trim().notEmpty().withMessage('Campaign title is required')],
   controller.updateCampaign
 );

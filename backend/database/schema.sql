@@ -44,6 +44,12 @@ ADD COLUMN IF NOT EXISTS share_count INT NOT NULL DEFAULT 0;
 ALTER TABLE campaigns
 ADD COLUMN IF NOT EXISTS supporting_documents JSONB NOT NULL DEFAULT '[]'::jsonb;
 
+ALTER TABLE campaigns
+ADD COLUMN IF NOT EXISTS bank_account VARCHAR(100);
+
+ALTER TABLE campaigns
+ADD COLUMN IF NOT EXISTS payout_phone VARCHAR(13);
+
 CREATE TABLE IF NOT EXISTS campaign_media (
   media_id SERIAL PRIMARY KEY,
   campaign_id INT NOT NULL REFERENCES campaigns(campaign_id) ON DELETE CASCADE,
@@ -141,3 +147,16 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   activity VARCHAR(100) NOT NULL,
   timestamp TIMESTAMP DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS contact_messages (
+  message_id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(100) NOT NULL,
+  message TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'read', 'archived')),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_campaigns_category ON campaigns(category);
+CREATE INDEX IF NOT EXISTS idx_contact_messages_status ON contact_messages(status);

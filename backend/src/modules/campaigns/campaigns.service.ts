@@ -22,6 +22,8 @@ export type CampaignInput = {
   image_url?: string;
   supporting_documents?: string[];
   verified?: boolean;
+  bank_account?: string;
+  payout_phone?: string;
 };
 
 export type CampaignUpdateInput = Partial<CampaignInput> & {
@@ -31,6 +33,7 @@ export type CampaignUpdateInput = Partial<CampaignInput> & {
 export type CampaignUpdatePayload = {
   campaign_id: string;
   content: string;
+  organizer_id?: string;
 };
 
 export type MilestonePayload = {
@@ -56,6 +59,9 @@ type CampaignRow = {
   category: string;
   organizer_id: number;
   organizer_name?: string;
+  bank_account?: string | null;
+  payout_phone?: string | null;
+  available_amount?: string;
   created_at: string;
   donor_count?: string;
   share_count?: string;
@@ -106,6 +112,14 @@ const normalizeUploadedDocumentUrls = (value: string[] | undefined): string[] =>
 const buildCampaignSelect = () => `
   SELECT c.*,
          u.full_name AS organizer_name,
+         GREATEST(
+           c.raised_amount - COALESCE((
+             SELECT SUM(w.amount)
+             FROM withdrawals w
+             WHERE w.campaign_id = c.campaign_id AND w.status = 'pending'
+           ), 0),
+           0
+         ) AS available_amount,
          (
            SELECT COUNT(*)
            FROM donations d
@@ -145,6 +159,8 @@ export const createCampaign = async (
         ? input.image_url
         : null);
   const supportingDocuments = [...normalizeDocuments(input.supporting_documents), ...normalizeUploadedDocumentUrls(uploadedDocumentUrls)];
+  const bankAccount = typeof input.bank_account === 'string' ? input.bank_account.trim() : '';
+  const payoutPhone = typeof input.payout_phone === 'string' ? input.payout_phone.trim() : '';
 
   if (!title || !description || !category || !Number.isFinite(goalAmount) || goalAmount <= 0) {
     const error: ServiceError = new Error('Invalid campaign payload');
@@ -152,9 +168,21 @@ export const createCampaign = async (
     throw error;
   }
 
+  if (!bankAccount) {
+    const error: ServiceError = new Error('Bank account is required for payout');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!payoutPhone) {
+    const error: ServiceError = new Error('Payout phone number is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
   const result = await pool.query<CampaignRow>(
-    `INSERT INTO campaigns (title, description, story, location, goal_amount, raised_amount, duration_days, image_url, supporting_documents, verified, status, category, organizer_id)
-     VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8::jsonb, $9, 'pending', $10, $11)
+    `INSERT INTO campaigns (title, description, story, location, goal_amount, raised_amount, duration_days, image_url, supporting_documents, verified, status, category, organizer_id, bank_account, payout_phone)
+     VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8::jsonb, $9, 'pending', $10, $11, $12, $13)
      RETURNING *`,
     [
       title,
@@ -168,6 +196,8 @@ export const createCampaign = async (
       input.verified ?? false,
       category,
       organizerId,
+      bankAccount,
+      payoutPhone,
     ]
   );
 
@@ -252,10 +282,29 @@ export const updateCampaign = async (
   }
 
   if (role !== 'admin' && current.rows[0].organizer_id !== Number(userId)) {
-    const error: ServiceError = new Error('Not authorized to update this campaign');
+    const error: ServiceError = new Error('Not authorized to edit this campaign');
     error.statusCode = 403;
     throw error;
   }
+
+  const campaignStatus = current.rows[0].status;
+
+  if (role !== 'admin') {
+    if (campaignStatus === 'pending') {
+      const error: ServiceError = new Error('Cannot edit campaign under review');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (!['approved', 'active', 'rejected'].includes(campaignStatus)) {
+      const error: ServiceError = new Error('Cannot edit campaign in current status');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  const shouldResubmit = role !== 'admin' && campaignStatus === 'rejected';
+  const nextStatus = input.status ?? (shouldResubmit ? 'pending' : null);
 
   const result = await pool.query<CampaignRow>(
     `UPDATE campaigns
@@ -266,7 +315,7 @@ export const updateCampaign = async (
          status = COALESCE($5, status)
      WHERE campaign_id = $6
      RETURNING *`,
-    [input.title ?? null, input.description ?? null, input.goal_amount ?? null, input.category ?? null, input.status ?? null, campaignId]
+    [input.title ?? null, input.description ?? null, input.goal_amount ?? null, input.category ?? null, nextStatus, campaignId]
   );
 
   return result.rows[0] || null;
@@ -288,9 +337,30 @@ export const deleteCampaign = async (campaignId: string, userId: string, role: s
   return true;
 };
 
-export const addCampaignUpdate = async (payload: CampaignUpdatePayload): Promise<{ update_id: number } | null> => {
-  const result = await pool.query<{ update_id: number }>(
-    'INSERT INTO campaign_updates (campaign_id, content) VALUES ($1, $2) RETURNING update_id',
+export const addCampaignUpdate = async (payload: CampaignUpdatePayload): Promise<{ update_id: number; campaign_id: number; content: string; posted_at: string } | null> => {
+  const campaign = await pool.query<{ organizer_id: number; status: CampaignStatus }>(
+    'SELECT organizer_id, status FROM campaigns WHERE campaign_id = $1',
+    [payload.campaign_id]
+  );
+
+  if ((campaign.rowCount || 0) === 0) {
+    return null;
+  }
+
+  if (payload.organizer_id && campaign.rows[0].organizer_id !== Number(payload.organizer_id)) {
+    const error: ServiceError = new Error('Not authorized');
+    error.statusCode = 403;
+    throw error;
+  }
+
+  if (!['approved', 'active'].includes(campaign.rows[0].status)) {
+    const error: ServiceError = new Error('Campaign must be approved or active to post updates');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const result = await pool.query<{ update_id: number; campaign_id: number; content: string; posted_at: string }>(
+    'INSERT INTO campaign_updates (campaign_id, content) VALUES ($1, $2) RETURNING update_id, campaign_id, content, posted_at',
     [payload.campaign_id, payload.content]
   );
   return result.rows[0] || null;

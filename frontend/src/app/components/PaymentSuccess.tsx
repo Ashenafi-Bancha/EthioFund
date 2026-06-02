@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Home, LayoutDashboard, Loader2 } from 'lucide-react';
 import { apiRequest } from '../lib/api';
+import { PageBackButton } from './PageBackButton';
 
 interface PaymentSuccessProps {
   onNavigate: (page: string) => void;
+  onBack?: () => void;
+  backLabel?: string;
 }
 
-export function PaymentSuccess({ onNavigate }: PaymentSuccessProps) {
+export function PaymentSuccess({ onNavigate, onBack, backLabel = 'Back' }: PaymentSuccessProps) {
   const txRef = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tx_ref') : null;
   const [checking, setChecking] = useState(Boolean(txRef));
   const [message, setMessage] = useState('Your donation has been verified and recorded. You can safely close this page or continue to your dashboard.');
@@ -63,6 +66,7 @@ export function PaymentSuccess({ onNavigate }: PaymentSuccessProps) {
 
   return (
     <section className="mx-auto w-full max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+      {onBack ? <PageBackButton onBack={onBack} label={backLabel} /> : null}
       <div className="overflow-hidden rounded-3xl border border-green-100 bg-white shadow-lg shadow-green-100/40">
         <div className="bg-gradient-to-r from-green-50 via-white to-emerald-50 px-8 py-10 sm:px-10">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-700 shadow-sm">

@@ -25,7 +25,19 @@ export interface PendingWithdrawalResponse {
   organizer_name: string;
   amount: number;
   bank_account: string;
+  campaign_bank_account: string;
   status: 'pending' | 'approved' | 'rejected' | 'paid';
+  created_at: string;
+  campaign_id: string;
+  raised_amount: number;
+}
+
+export interface ContactMessageResponse {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
+  status: 'new' | 'read' | 'archived';
   created_at: string;
 }
 
@@ -127,10 +139,10 @@ export const useAdminStats = (): UseAdminStatsResult => {
       try {
         setLoading(true);
         setError(null);
-        const response = await apiRequest<{ success?: boolean; stats?: AdminStatsResponse }>('/admin/stats', {
+        const response = await apiRequest<{ success?: boolean; data?: AdminStatsResponse; stats?: AdminStatsResponse }>('/admin/stats', {
           authToken: token,
         });
-        setStats(response.stats ?? null);
+        setStats(response.data ?? response.stats ?? null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch admin stats');
         setStats(null);
@@ -172,7 +184,7 @@ export const usePendingCampaigns = (): UsePendingCampaignsResult => {
         }[] }>( '/campaigns?status=pending', {
           authToken: token,
         });
-        const data = response.campaigns ?? [];
+        const data = response.data ?? response.campaigns ?? [];
         setCampaigns(
           data.map((campaign) => ({
             id: String(campaign.id ?? campaign.campaign_id ?? ''),
@@ -218,24 +230,32 @@ export const usePendingWithdrawals = (): UsePendingWithdrawalsResult => {
           id?: string | number;
           campaign_title?: string;
           organizer_name?: string;
+          campaign_id?: string | number;
           amount: string | number;
           bank_account?: string;
+          campaign_bank_account?: string;
           status: 'pending' | 'approved' | 'rejected' | 'paid';
           request_date?: string;
+          raised_amount?: string | number;
         }[] }>('/admin/withdrawals', {
           authToken: token,
         });
-        const data = response.withdrawals ?? [];
+        const data = response.data ?? response.withdrawals ?? [];
         setWithdrawals(
-          data.map((withdrawal) => ({
-            id: String(withdrawal.id ?? withdrawal.withdrawal_id ?? ''),
-            campaign_title: withdrawal.campaign_title ?? 'Campaign',
-            organizer_name: withdrawal.organizer_name ?? 'Organizer',
-            amount: Number(withdrawal.amount) || 0,
-            bank_account: withdrawal.bank_account ?? '',
-            status: withdrawal.status,
-            created_at: withdrawal.request_date ?? new Date().toISOString(),
-          }))
+          data
+            .filter((withdrawal) => withdrawal.status === 'pending')
+            .map((withdrawal) => ({
+              id: String(withdrawal.id ?? withdrawal.withdrawal_id ?? ''),
+              campaign_title: withdrawal.campaign_title ?? 'Campaign',
+              organizer_name: withdrawal.organizer_name ?? 'Organizer',
+              campaign_id: String(withdrawal.campaign_id ?? ''),
+              amount: Number(withdrawal.amount) || 0,
+              raised_amount: Number(withdrawal.raised_amount) || 0,
+              bank_account: withdrawal.bank_account ?? '',
+              campaign_bank_account: withdrawal.campaign_bank_account ?? '',
+              status: withdrawal.status,
+              created_at: withdrawal.request_date ?? new Date().toISOString(),
+            }))
         );
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch pending withdrawals');
@@ -338,7 +358,7 @@ export const usePendingComments = (): UsePendingCommentsResult => {
           authToken: token,
         });
 
-        const rows = response.comments ?? [];
+        const rows = response.data ?? response.comments ?? [];
         setComments(
           rows.map((comment) => ({
             id: String(comment.comment_id ?? ''),
@@ -394,7 +414,7 @@ export const useAdminComments = (): UseAdminCommentsResult => {
           authToken: token,
         });
 
-        const rows = response.comments ?? [];
+        const rows = response.data ?? response.comments ?? [];
         setComments(
           rows.map((comment) => ({
             id: String(comment.comment_id ?? ''),
@@ -449,7 +469,7 @@ export const useAdminActivityLogs = (): UseAdminActivityLogsResult => {
           authToken: token,
         });
 
-        const rows = response.logs ?? [];
+        const rows = response.data ?? response.logs ?? [];
         setLogs(
           rows.map((log) => ({
             id: String(log.log_id ?? ''),
@@ -502,4 +522,138 @@ export const useReviewComment = (): UseReviewCommentResult => {
   };
 
   return { loading, error, reviewComment };
+};
+
+/**
+ * Allow admin to approve or reject a withdrawal request.
+ */
+export interface UseUpdateWithdrawalStatusResult {
+  loading: boolean;
+  error: string | null;
+  updateWithdrawalStatus: (withdrawalId: string, status: 'approved' | 'rejected') => Promise<boolean>;
+}
+
+interface UseContactMessagesResult {
+  messages: ContactMessageResponse[];
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+interface UseUpdateContactMessageStatusResult {
+  loading: boolean;
+  error: string | null;
+  updateContactMessageStatus: (messageId: string, status: 'new' | 'read' | 'archived') => Promise<boolean>;
+}
+
+export const useUpdateWithdrawalStatus = (): UseUpdateWithdrawalStatusResult => {
+  const { token } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateWithdrawalStatus = async (withdrawalId: string, status: 'approved' | 'rejected'): Promise<boolean> => {
+    try {
+      setLoading(true);
+      setError(null);
+      await apiRequest(`/admin/withdrawals/${withdrawalId}/status`, {
+        method: 'PATCH',
+        authToken: token,
+        body: JSON.stringify({ status }),
+      });
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update withdrawal status';
+      setError(message);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { loading, error, updateWithdrawalStatus };
+};
+
+/**
+ * Fetch contact form messages for admin support inbox
+ */
+export const useContactMessages = (status?: 'new' | 'read' | 'archived'): UseContactMessagesResult => {
+  const { token } = useAuth();
+  const [messages, setMessages] = useState<ContactMessageResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const query = status ? `?status=${status}` : '';
+        const response = await apiRequest<{ success?: boolean; data?: {
+          message_id?: string | number;
+          id?: string | number;
+          name: string;
+          email: string;
+          message: string;
+          status: 'new' | 'read' | 'archived';
+          created_at: string;
+        }[] }>(`/admin/contact-messages${query}`, {
+          authToken: token,
+        });
+        const rows = response.data ?? [];
+        setMessages(
+          rows.map((row) => ({
+            id: String(row.message_id ?? row.id ?? ''),
+            name: row.name,
+            email: row.email,
+            message: row.message,
+            status: row.status,
+            created_at: row.created_at,
+          }))
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch contact messages');
+        setMessages([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void fetchMessages();
+  }, [token, status, refreshIndex]);
+
+  return { messages, loading, error, reload: () => setRefreshIndex((value) => value + 1) };
+};
+
+/**
+ * Update contact message status (new, read, archived)
+ */
+export const useUpdateContactMessageStatus = (): UseUpdateContactMessageStatusResult => {
+  const { token } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateContactMessageStatus = async (
+    messageId: string,
+    status: 'new' | 'read' | 'archived'
+  ): Promise<boolean> => {
+    try {
+      setLoading(true);
+      setError(null);
+      await apiRequest(`/admin/contact-messages/${messageId}/status`, {
+        method: 'PATCH',
+        authToken: token,
+        body: JSON.stringify({ status }),
+      });
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update contact message';
+      setError(message);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { loading, error, updateContactMessageStatus };
 };

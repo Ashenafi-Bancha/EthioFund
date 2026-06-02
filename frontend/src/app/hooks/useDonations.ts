@@ -81,10 +81,10 @@ export const useUserDonations = (): UseDonationsResult => {
       try {
         setLoading(true);
         setError(null);
-        const response = await apiRequest<{ success?: boolean; donations?: DonationApiRow[] } | DonationApiRow[]>('/users/me/donations', {
+        const response = await apiRequest<{ success?: boolean; data?: DonationApiRow[]; donations?: DonationApiRow[] } | DonationApiRow[]>('/donations/my-donations', {
           authToken: token,
         });
-        const data = Array.isArray(response) ? response : response.donations ?? [];
+        const data = Array.isArray(response) ? response : response.data ?? response.donations ?? [];
         setDonations(data.map(normalizeDonation));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch donations');
@@ -119,8 +119,8 @@ export const useCampaignDonations = (campaignId: string | null): UseDonationsRes
       try {
         setLoading(true);
         setError(null);
-        const response = await apiRequest<{ success?: boolean; donations?: DonationApiRow[] } | DonationApiRow[]>(`/donations/campaign/${campaignId}`);
-        const data = Array.isArray(response) ? response : response.donations ?? [];
+        const response = await apiRequest<{ success?: boolean; data?: DonationApiRow[]; donations?: DonationApiRow[] } | DonationApiRow[]>(`/donations/campaign/${campaignId}`);
+        const data = Array.isArray(response) ? response : response.data ?? response.donations ?? [];
         setDonations(data.map(normalizeDonation));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch donations');
@@ -148,7 +148,12 @@ export const useInitiateDonation = (): UseInitiateDonationResult => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiRequest<{ success?: boolean; donation?: DonationApiRow; payment?: { txRef: string; checkoutUrl: string | null } }>('/donations', {
+      const response = await apiRequest<{
+        success?: boolean;
+        data?: { checkout_url: string; tx_ref: string; donation_id?: number };
+        donation?: DonationApiRow;
+        payment?: { txRef: string; checkoutUrl: string | null };
+      }>('/payments/initialize', {
         method: 'POST',
         authToken: token,
         body: JSON.stringify({
@@ -158,11 +163,23 @@ export const useInitiateDonation = (): UseInitiateDonationResult => {
           message: data.message,
         }),
       });
-      if (!response.donation || !response.payment) {
+
+      const checkoutUrl = response.data?.checkout_url ?? response.payment?.checkoutUrl ?? null;
+      const txRef = response.data?.tx_ref ?? response.payment?.txRef ?? '';
+
+      if (!checkoutUrl) {
         return null;
       }
 
-      return { donation: normalizeDonation(response.donation), payment: response.payment };
+      return {
+        donation: normalizeDonation({
+          donation_id: response.data?.donation_id ?? '',
+          campaign_id: data.campaign_id,
+          amount: data.amount,
+          is_anonymous: data.anonymous,
+        }),
+        payment: { txRef, checkoutUrl },
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to initiate donation';
       setError(message);

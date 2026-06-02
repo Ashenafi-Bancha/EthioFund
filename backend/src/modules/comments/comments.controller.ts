@@ -6,7 +6,7 @@ export const addComment = async (req: Request, res: Response, next: NextFunction
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ success: false, errors: errors.array() });
+      return res.status(400).json({ success: false, message: 'Comment content is required', errors: errors.array() });
     }
 
     if (!req.user) {
@@ -19,20 +19,31 @@ export const addComment = async (req: Request, res: Response, next: NextFunction
       return res.status(500).json({ success: false, message: 'Failed to save comment' });
     }
 
+    // TC-13 Step 4: Rejected comments are saved to DB (hidden from public), return 202
+    if (result.rejected) {
+      return res.status(202).json({
+        success: true,
+        message: 'Your comment did not pass moderation and will not be shown publicly.',
+        comment: result.comment,
+        moderation: result.moderation,
+        pendingReview: false,
+      });
+    }
+
     if (result.moderation.decision === 'approved') {
       return res.status(201).json({
         success: true,
-        message: 'Comment published successfully',
-        comment: result.comment,
+        data: result.comment,
         moderation: result.moderation,
       });
     }
 
     return res.status(202).json({
       success: true,
+      data: result.comment,
       message: 'Comment submitted for review',
-      comment: result.comment,
       moderation: result.moderation,
+      pendingReview: true,
     });
   } catch (error) {
     return next(error);

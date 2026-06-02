@@ -10,8 +10,19 @@ interface NavigationProps {
   currentPage: string;
 }
 
+const publicNavItems = [
+  ['home', 'Home'],
+  ['campaigns', 'Campaigns'],
+  ['about', 'About'],
+  ['contact', 'Contact'],
+] as const;
+
 export function Navigation({ currentUser, onNavigate, onLogout, currentPage }: NavigationProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navItems = currentUser?.role === 'admin'
+    ? publicNavItems.filter(([page]) => page !== 'contact')
+    : publicNavItems;
 
   const getDashboardPage = () => {
     if (!currentUser) return 'home';
@@ -40,12 +51,7 @@ export function Navigation({ currentUser, onNavigate, onLogout, currentPage }: N
           </button>
 
           <div className="hidden items-center gap-2 md:flex">
-            {[
-              ['home', 'Home'],
-              ['campaigns', 'Campaigns'],
-              ['about', 'About'],
-              ['contact', 'Contact'],
-            ].map(([page, label]) => (
+            {navItems.map(([page, label]) => (
               <button
                 key={page}
                 type="button"
@@ -67,6 +73,13 @@ export function Navigation({ currentUser, onNavigate, onLogout, currentPage }: N
                 >
                   <UserCircle className="h-5 w-5" />
                   {currentUser.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('profile')}
+                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${isActive('profile') ? 'text-green-700 bg-green-50' : 'text-gray-600 hover:text-green-600'}`}
+                >
+                  Edit Profile
                 </button>
                 <button type="button" onClick={onLogout} className="rounded-full px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:text-red-600">
                   Logout
@@ -97,12 +110,7 @@ export function Navigation({ currentUser, onNavigate, onLogout, currentPage }: N
         {mobileMenuOpen && (
           <div className="md:hidden">
             <div className="space-y-2 border-t border-gray-200 py-4">
-              {[
-                ['home', 'Home'],
-                ['campaigns', 'Campaigns'],
-                ['about', 'About'],
-                ['contact', 'Contact'],
-              ].map(([page, label]) => (
+              {navItems.map(([page, label]) => (
                 <button
                   key={page}
                   type="button"
@@ -128,6 +136,17 @@ export function Navigation({ currentUser, onNavigate, onLogout, currentPage }: N
                   >
                     <UserCircle className="h-5 w-5" />
                     {currentUser.name}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNavigate('profile');
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left transition-colors ${isActive('profile') ? 'bg-green-50 text-green-700 font-semibold' : 'text-gray-700 hover:bg-gray-100'}`}
+                  >
+                    <UserCircle className="h-5 w-5" />
+                    Edit Profile
                   </button>
                   <button
                     type="button"

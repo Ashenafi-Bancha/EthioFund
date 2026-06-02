@@ -1,10 +1,13 @@
 import { ArrowRight, Award, Building2, HeartHandshake, ShieldCheck, Sparkles, Users } from 'lucide-react';
+import { PageBackButton } from './PageBackButton';
 
 interface AboutPageProps {
   onNavigate: (page: string) => void;
+  onBack: () => void;
+  backLabel?: string;
 }
 
-export function AboutPage({ onNavigate }: AboutPageProps) {
+export function AboutPage({ onNavigate, onBack, backLabel = 'Back' }: AboutPageProps) {
   const values = [
     { icon: ShieldCheck, title: 'Trust first', description: 'Verified campaigns, transparent progress, and visible outcomes.' },
     { icon: HeartHandshake, title: 'Community driven', description: 'Built to connect donors, organizers, and local communities.' },
@@ -19,6 +22,9 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <div className="mx-auto max-w-7xl px-4 pt-8">
+        <PageBackButton onBack={onBack} label={backLabel} />
+      </div>
       <section className="bg-gradient-to-br from-green-50 via-white to-cyan-50 px-4 py-16">
         <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <div>

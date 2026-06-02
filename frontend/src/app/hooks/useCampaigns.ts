@@ -5,6 +5,9 @@ import { apiRequest, resolveApiUrl } from '../lib/api';
 type CampaignApiRow = {
   id?: string;
   campaign_id?: string | number;
+  shareUrl?: string;
+  share_url?: string;
+  share_count?: string | number;
   title: string;
   description: string;
   story?: string;
@@ -21,6 +24,12 @@ type CampaignApiRow = {
   duration_days?: string | number;
   verified?: boolean;
   donor_count?: string | number;
+  bank_account?: string | null;
+  payout_phone?: string | null;
+  available_amount?: string | number;
+  bankAccount?: string | null;
+  payoutPhone?: string | null;
+  availableAmount?: string | number;
 };
 
 const defaultCampaignImage = 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=1200&q=80';
@@ -69,6 +78,7 @@ const normalizeCampaign = (campaign: CampaignApiRow): CampaignResponse => {
 
   return {
     id: String(campaign.id ?? campaign.campaign_id ?? ''),
+    share_url: campaign.shareUrl ?? campaign.share_url ?? '',
     title: campaign.title,
     description: campaign.description,
     story: campaign.story ?? campaign.description,
@@ -76,6 +86,9 @@ const normalizeCampaign = (campaign: CampaignApiRow): CampaignResponse => {
     location: campaign.location ?? 'Ethiopia',
     goal_amount: Number(campaign.goal_amount) || 0,
     raised_amount: Number(campaign.raised_amount) || 0,
+    available_amount: Number(campaign.available_amount ?? campaign.availableAmount ?? campaign.raised_amount) || 0,
+    bank_account: campaign.bank_account ?? campaign.bankAccount ?? '',
+    payout_phone: campaign.payout_phone ?? campaign.payoutPhone ?? '',
     image_url: resolveApiUrl(campaign.image_url) || defaultCampaignImage,
     status: statusMap[campaign.status] ?? 'active',
     organizer_id: String(campaign.organizer_id),
@@ -84,13 +97,14 @@ const normalizeCampaign = (campaign: CampaignApiRow): CampaignResponse => {
     duration_days: Number(campaign.duration_days) || 30,
     verified: Boolean(campaign.verified),
     donor_count: Number(campaign.donor_count) || 0,
-    share_count: Number((campaign as any).share_count) || 0,
+    share_count: Number(campaign.share_count) || 0,
     supporting_documents: normalizeDocuments(campaign.supporting_documents),
   };
 };
 
 export interface CampaignResponse {
   id: string;
+  share_url: string;
   title: string;
   description: string;
   story: string;
@@ -98,6 +112,9 @@ export interface CampaignResponse {
   location: string;
   goal_amount: number;
   raised_amount: number;
+  available_amount: number;
+  bank_account: string;
+  payout_phone: string;
   image_url: string;
   status: 'pending' | 'active' | 'completed' | 'cancelled';
   organizer_id: string;
@@ -120,6 +137,8 @@ export interface CreateCampaignInput {
   duration_days: number;
   campaign_image: File;
   supporting_documents?: File[];
+  bank_account: string;
+  payout_phone: string;
 }
 
 interface UseCampaignsResult {
@@ -132,6 +151,7 @@ interface UseCampaignDetailResult {
   campaign: CampaignResponse | null;
   loading: boolean;
   error: string | null;
+  reload: () => void;
 }
 
 interface UseCreateCampaignResult {
@@ -159,15 +179,15 @@ export const useCampaigns = (
       try {
         setLoading(true);
         setError(null);
-        
+
         const query = new URLSearchParams();
         if (filters?.status) query.append('status', filters.status);
         if (filters?.category) query.append('category', filters.category);
         if (filters?.search) query.append('search', filters.search);
-        
+
         const url = `/campaigns${query.toString() ? '?' + query.toString() : ''}`;
-        const response = await apiRequest<{ success?: boolean; campaigns?: CampaignApiRow[] } | CampaignApiRow[]>(url);
-        const data = Array.isArray(response) ? response : response.campaigns ?? [];
+        const response = await apiRequest<{ success?: boolean; data?: CampaignApiRow[]; campaigns?: CampaignApiRow[] } | CampaignApiRow[]>(url);
+        const data = Array.isArray(response) ? response : response.data ?? response.campaigns ?? [];
         setCampaigns(data.map(normalizeCampaign));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch campaigns');
@@ -190,6 +210,7 @@ export const useCampaignDetail = (campaignId: string | null): UseCampaignDetailR
   const [campaign, setCampaign] = useState<CampaignResponse | null>(null);
   const [loading, setLoading] = useState(!!campaignId);
   const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
 
   useEffect(() => {
     if (!campaignId) {
@@ -202,8 +223,10 @@ export const useCampaignDetail = (campaignId: string | null): UseCampaignDetailR
       try {
         setLoading(true);
         setError(null);
-        const response = await apiRequest<{ success?: boolean; campaign?: CampaignApiRow } | CampaignApiRow>(`/campaigns/${campaignId}`);
-        const data = Array.isArray(response) ? response[0] : 'campaign' in response ? response.campaign : response;
+        const response = await apiRequest<{ success?: boolean; data?: CampaignApiRow; campaign?: CampaignApiRow } | CampaignApiRow>(
+          `/campaigns/${campaignId}`
+        );
+        const data = Array.isArray(response) ? response[0] : response.data ?? response.campaign ?? response;
         setCampaign(normalizeCampaign(data));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch campaign');
@@ -214,9 +237,9 @@ export const useCampaignDetail = (campaignId: string | null): UseCampaignDetailR
     };
 
     fetchCampaign();
-  }, [campaignId]);
+  }, [campaignId, refreshIndex]);
 
-  return { campaign, loading, error };
+  return { campaign, loading, error, reload: () => setRefreshIndex((prev) => prev + 1) };
 };
 
 /**
@@ -244,6 +267,8 @@ export const useCreateCampaign = (): UseCreateCampaignResult => {
       formData.append('location', data.location);
       formData.append('goal_amount', String(data.goal_amount));
       formData.append('duration_days', String(data.duration_days));
+      formData.append('bank_account', data.bank_account);
+      formData.append('payout_phone', data.payout_phone);
 
       formData.append('campaign_image', data.campaign_image);
 
@@ -251,12 +276,13 @@ export const useCreateCampaign = (): UseCreateCampaignResult => {
         formData.append('supporting_documents', file);
       });
 
-      const response = await apiRequest<{ success?: boolean; campaign?: CampaignApiRow }>('/campaigns', {
+      const response = await apiRequest<{ success?: boolean; data?: CampaignApiRow; campaign?: CampaignApiRow }>('/campaigns', {
         method: 'POST',
         body: formData,
         authToken: token,
       });
-      return normalizeCampaign(response.campaign as CampaignApiRow);
+      const created = response.data ?? response.campaign;
+      return created ? normalizeCampaign(created) : null;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create campaign';
       setError(message);
@@ -293,7 +319,11 @@ export const useUserCampaigns = (): UseCampaignsResult => {
         const response = await apiRequest<{ success?: boolean; campaigns?: CampaignApiRow[] } | CampaignApiRow[]>('/campaigns/my', {
           authToken: token,
         });
-        const data = Array.isArray(response) ? response : response.campaigns ?? [];
+        const data = Array.isArray(response)
+          ? response
+          : (response as { data?: CampaignApiRow[]; campaigns?: CampaignApiRow[] }).data ??
+            (response as { campaigns?: CampaignApiRow[] }).campaigns ??
+            [];
         setCampaigns(data.map(normalizeCampaign));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch campaigns');
@@ -307,4 +337,47 @@ export const useUserCampaigns = (): UseCampaignsResult => {
   }, [token]);
 
   return { campaigns, loading, error };
+};
+
+/**
+ * Update a campaign (organizer edits fields, or admin changes status).
+ */
+export interface UpdateCampaignInput {
+  title?: string;
+  description?: string;
+  goal_amount?: number;
+  category?: string;
+  status?: string;
+}
+
+export interface UseUpdateCampaignResult {
+  loading: boolean;
+  error: string | null;
+  updateCampaign: (campaignId: string, data: UpdateCampaignInput) => Promise<CampaignResponse | null>;
+}
+
+export const useUpdateCampaign = (): UseUpdateCampaignResult => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { token } = useAuth();
+
+  const updateCampaign = async (campaignId: string, data: UpdateCampaignInput): Promise<CampaignResponse | null> => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await apiRequest<{ success?: boolean; data?: CampaignApiRow; campaign?: CampaignApiRow }>(
+        `/campaigns/${campaignId}`,
+        { method: 'PUT', body: JSON.stringify(data), authToken: token }
+      );
+      const updated = response.data ?? response.campaign;
+      return updated ? normalizeCampaign(updated) : null;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update campaign');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { loading, error, updateCampaign };
 };

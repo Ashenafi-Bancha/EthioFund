@@ -7,14 +7,13 @@ type ModerationStatus = 'approved' | 'pending_review' | 'rejected';
 export const addComment = async (userId: string, campaignId: string, content: string) => {
   const moderation = await moderateCommentContent(content);
 
-  if (moderation.decision === 'rejected') {
-    const error = new Error(moderation.reason);
-    (error as Error & { statusCode?: number; details?: unknown }).statusCode = 422;
-    (error as Error & { statusCode?: number; details?: unknown }).details = moderation;
-    throw error;
-  }
-
-  const moderationStatus = moderation.decision === 'approved' ? 'approved' : 'pending_review';
+  // TC-13 Step 4: Save rejected comments to DB with status='rejected' — they are hidden from public
+  // but logged for admin review. Do NOT throw an error; just store and notify the caller.
+  const moderationStatus: ModerationStatus = moderation.decision === 'approved'
+    ? 'approved'
+    : moderation.decision === 'rejected'
+      ? 'rejected'
+      : 'pending_review';
 
   const result = await pool.query(
     `INSERT INTO comments (content, user_id, campaign_id, moderation_status, moderation_reason, moderation_score, moderated_at)
@@ -23,7 +22,13 @@ export const addComment = async (userId: string, campaignId: string, content: st
     [content, userId, campaignId, moderationStatus, moderation.reason, moderation.score]
   );
 
-  const comment = result.rows[0] || null;
+  const commentRow = result.rows[0] || null;
+  let comment = commentRow;
+
+  if (commentRow) {
+    const userResult = await pool.query<{ full_name: string }>('SELECT full_name FROM users WHERE user_id = $1', [userId]);
+    comment = { ...commentRow, full_name: userResult.rows[0]?.full_name ?? null };
+  }
 
   if (comment) {
     void recordActivity(
@@ -35,12 +40,14 @@ export const addComment = async (userId: string, campaignId: string, content: st
   return {
     comment,
     moderation,
+    pendingReview: moderationStatus === 'pending_review',
+    rejected: moderationStatus === 'rejected',
   };
 };
 
 export const getCommentsByCampaign = async (campaignId: string) => {
   const result = await pool.query(
-    `SELECT c.comment_id, c.content, c.user_id, c.campaign_id, c.moderation_status, c.moderation_reason, c.moderation_score, c.moderated_at, c.created_at, u.full_name AS user_name
+    `SELECT c.comment_id, c.content, c.user_id, c.campaign_id, c.moderation_status, c.moderation_reason, c.moderation_score, c.moderated_at, c.created_at, u.full_name
      FROM comments c
      LEFT JOIN users u ON u.user_id = c.user_id
      WHERE c.campaign_id = $1 AND c.moderation_status = 'approved'

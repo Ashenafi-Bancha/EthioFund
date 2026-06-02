@@ -1,19 +1,22 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, CheckCircle, MapPin, Calendar, Share2, Heart, MessageCircle, Users, TrendingUp, Loader, FileText, Download } from 'lucide-react';
+import { ArrowLeft, CheckCircle, MapPin, Calendar, Share2, Link as LinkIcon, Heart, MessageCircle, Users, TrendingUp, Loader, FileText, Download } from 'lucide-react';
 import { toast } from 'sonner';
-import { useCampaignDetail } from '../hooks/useCampaigns';
+import { useCampaignDetail, useUpdateCampaign } from '../hooks/useCampaigns';
 import { useCampaignComments, useAddComment } from '../hooks/useComments';
 import { useCampaignDonations } from '../hooks/useDonations';
 import { useAuth } from '../context/AuthContext';
+import { useApproveCampaign, useRejectCampaign } from '../hooks/useAdmin';
 import { apiRequest } from '../lib/api';
 import { DonateModal } from './EnhancedDonateModal';
 import { ShareCampaignModal } from './ShareCampaignModal';
 import { CampaignUpdates } from './CampaignUpdates';
 import { Milestones } from './Milestones';
+import { PageBackButton } from './PageBackButton';
 
 interface CampaignDetailProps {
   campaignId: string | null;
   onBack: () => void;
+  backLabel?: string;
 }
 
 type CampaignUpdateRow = {
@@ -34,12 +37,16 @@ type MilestoneRow = {
   created_at: string;
 };
 
-export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
+export function CampaignDetail({ campaignId, onBack, backLabel = 'Back' }: CampaignDetailProps) {
   const { user: currentUser } = useAuth();
-  const { campaign, loading: campaignLoading, error: campaignError } = useCampaignDetail(campaignId);
+  const { campaign, loading: campaignLoading, error: campaignError, reload: reloadCampaign } = useCampaignDetail(campaignId);
   const { comments: campaignComments, loading: commentsLoading } = useCampaignComments(campaignId);
   const { donations: recentDonations, loading: donationsLoading } = useCampaignDonations(campaignId);
   const { addComment, loading: addingComment } = useAddComment();
+
+  const { approveCampaign, loading: approvingCampaign } = useApproveCampaign();
+  const { rejectCampaign, loading: rejectingCampaign } = useRejectCampaign();
+  const { updateCampaign, loading: updatingCampaign } = useUpdateCampaign();
 
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -74,6 +81,8 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     setShareCount(campaign?.share_count ?? 0);
   }, [campaign?.share_count]);
 
+  // Load collateral resource tables (updates & milestones) in parallel.
+  // Optimizes networking performance by using Promise.all to fetch both datasets concurrently.
   useEffect(() => {
     if (!campaignId) {
       setUpdates([]);
@@ -88,9 +97,11 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
           apiRequest<{ success?: boolean; milestones?: MilestoneRow[] } | MilestoneRow[]>(`/campaigns/${campaignId}/milestones`),
         ]);
 
+        // Normalize variations in API response shapes (raw arrays vs wrapped success payloads)
         const updateRows = Array.isArray(updatesResponse) ? updatesResponse : updatesResponse.updates ?? [];
         const milestoneRows = Array.isArray(milestonesResponse) ? milestonesResponse : milestonesResponse.milestones ?? [];
 
+        // Map updates to component state representation
         setUpdates(updateRows.map((update) => ({
           id: String(update.update_id),
           campaignId: String(update.campaign_id),
@@ -101,6 +112,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
           createdBy: campaign?.organizer_name ?? 'Organizer',
         })));
 
+        // Map milestones to component state representation
         setMilestones(milestoneRows.map((milestone) => ({
           id: String(milestone.milestone_id),
           amount: Number(milestone.target_amount) || 0,
@@ -109,6 +121,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
           reachedDate: milestone.completed_at ?? undefined,
         })));
       } catch {
+        // Safe fallback resets state grids silently on query failure
         setUpdates([]);
         setMilestones([]);
       }
@@ -141,29 +154,97 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     );
   }
 
+  const handleAdminApprove = async () => {
+    if (!campaignId) return;
+    const ok = await approveCampaign(campaignId);
+    if (ok) {
+      toast.success('Campaign approved and published successfully.');
+      reloadCampaign();
+    } else {
+      toast.error('Failed to approve campaign.');
+    }
+  };
+
+  const handleAdminReject = async () => {
+    if (!campaignId) return;
+    const reason = prompt('Please enter the reason for rejection:');
+    if (reason === null) return;
+    const ok = await rejectCampaign(campaignId, reason || 'Rejected after admin review');
+    if (ok) {
+      toast.success('Campaign rejected successfully.');
+      reloadCampaign();
+    } else {
+      toast.error('Failed to reject campaign.');
+    }
+  };
+
+  const handleUpdateStatus = async (newStatus: 'active' | 'closed') => {
+    if (!campaignId) return;
+    const ok = await updateCampaign(campaignId, { status: newStatus });
+    if (ok) {
+      toast.success(`Campaign successfully ${newStatus === 'active' ? 're-opened' : 'closed'}.`);
+      reloadCampaign();
+    } else {
+      toast.error('Failed to update campaign status.');
+    }
+  };
+
   const progress = (campaign.raised_amount / campaign.goal_amount) * 100;
   const isOrganizer = currentUser?.id === campaign.organizer_id;
   const daysLeft = Math.max(0, Math.ceil((new Date(campaign.created_at).getTime() + campaign.duration_days * 86400000 - Date.now()) / 86400000));
   const supportingDocuments = campaign.supporting_documents ?? [];
   const canReviewDocuments = currentUser?.role === 'admin' || isOrganizer;
+  const shareUrl = campaign.share_url || `${window.location.origin}/campaigns/${campaign.id}`;
+
+  const handleCopyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Campaign link copied to clipboard!');
+    } catch {
+      toast.error('Unable to copy link. Please try again.');
+    }
+  };
+
+  const canDonate = campaign.status === 'active' && !isOrganizer;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Back Button */}
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Campaigns
-        </button>
+    <div className="min-h-screen bg-gray-50 px-4 py-6 pb-28 lg:pb-8 lg:py-8">
+      <div className="mx-auto max-w-7xl">
+        <PageBackButton onBack={onBack} label={backLabel} className="mb-4" />
+
+        {/* Administrative Approval Banner */}
+        {currentUser?.role === 'admin' && campaign.status === 'pending' && (
+          <div className="mb-6 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 p-6 text-white shadow-lg flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold">Campaign Pending Approval</h3>
+              <p className="mt-1 text-sm text-orange-50">Review the supporting documents and project story below before making a decision.</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => void handleAdminApprove()}
+                disabled={approvingCampaign}
+                className="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-orange-600 hover:bg-orange-50 transition-colors shadow-sm disabled:opacity-50"
+              >
+                Approve Campaign
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleAdminReject()}
+                disabled={rejectingCampaign}
+                className="inline-flex items-center justify-center rounded-xl bg-orange-700 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-800 transition-colors shadow-sm disabled:opacity-50"
+              >
+                Reject Campaign
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2">
             {/* Campaign Image */}
-            <div className="relative h-96 rounded-xl overflow-hidden mb-6">
+            <div className="relative mb-4 h-48 overflow-hidden rounded-xl sm:mb-6 sm:h-64 lg:h-80">
               <img
                 src={campaign.image_url}
                 alt={campaign.title}
@@ -177,16 +258,43 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
               )}
             </div>
 
+            <div className="mb-4 rounded-xl bg-white p-4 shadow-md lg:hidden">
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <span className="text-xl font-bold text-gray-900">ETB {campaign.raised_amount.toLocaleString()}</span>
+                <span className="text-xs text-gray-500">of {campaign.goal_amount.toLocaleString()}</span>
+              </div>
+              <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full bg-green-600 transition-all"
+                  style={{ width: `${Math.min(progress, 100)}%` }}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs text-gray-600">
+                <div>
+                  <div className="font-bold text-gray-900">{campaign.donor_count}</div>
+                  <div>donors</div>
+                </div>
+                <div>
+                  <div className="font-bold text-gray-900">{daysLeft}</div>
+                  <div>days left</div>
+                </div>
+                <div>
+                  <div className="font-bold text-gray-900">{shareCount}</div>
+                  <div>shares</div>
+                </div>
+              </div>
+            </div>
+
             {/* Campaign Title & Info */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    <span className="inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+            <div className="mb-4 rounded-xl bg-white p-4 shadow-md sm:mb-6 sm:p-6">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <span className="inline-block rounded-full bg-green-100 px-3 py-1 text-xs text-green-700 sm:text-sm">
                       {campaign.category}
                     </span>
                   </div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">{campaign.title}</h1>
+                  <h1 className="mb-2 text-xl font-bold text-gray-900 sm:text-2xl lg:text-3xl">{campaign.title}</h1>
                   <div className="flex flex-wrap items-center gap-4 text-gray-600 text-sm">
                     <div className="flex items-center gap-1">
                       <MapPin className="w-4 h-4" />
@@ -198,15 +306,25 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                     </div>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setShowShareModal(true)}
-                  className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <Share2 className="w-5 h-5 text-gray-600" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyShareLink}
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50"
+                  >
+                    <LinkIcon className="w-4 h-4" />
+                    Copy Link
+                  </button>
+                  <button
+                    onClick={() => setShowShareModal(true)}
+                    className="p-3 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <Share2 className="w-5 h-5 text-gray-600" />
+                  </button>
+                </div>
               </div>
 
-              <p className="text-lg text-gray-700 mb-4">{campaign.description}</p>
+              <p className="mb-4 text-sm text-gray-700 sm:text-base">{campaign.description}</p>
 
               <div className="flex items-center gap-3 text-sm text-gray-600 mb-4">
                 <span>by <span className="font-semibold text-gray-900">{campaign.organizer_name}</span></span>
@@ -391,11 +509,38 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <div className="sticky top-24 space-y-6">
+            <div className="space-y-4 lg:sticky lg:top-24 lg:space-y-6">
+              {/* Status Management Card */}
+              {(isOrganizer || currentUser?.role === 'admin') && (campaign.status === 'active' || campaign.status === 'completed') && (
+                <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500">
+                  <h3 className="font-semibold text-gray-900 mb-1">Campaign Controls</h3>
+                  <p className="text-xs text-gray-500 mb-4">Manage this campaign's status and public visibility.</p>
+                  {campaign.status === 'active' ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleUpdateStatus('closed')}
+                      disabled={updatingCampaign}
+                      className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-all font-semibold flex items-center justify-center gap-2"
+                    >
+                      Close Campaign
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void handleUpdateStatus('active')}
+                      disabled={updatingCampaign}
+                      className="w-full py-3 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg transition-all font-semibold flex items-center justify-center gap-2"
+                    >
+                      Re-open Campaign
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Donation Card */}
-              <div className="bg-white rounded-xl shadow-md p-6">
+              <div className="hidden rounded-xl bg-white p-4 shadow-md sm:block sm:p-6 lg:block">
                 <div className="mb-6">
-                  <div className="text-3xl font-bold text-gray-900 mb-1">
+                  <div className="mb-1 text-2xl font-bold text-gray-900 sm:text-3xl">
                     ETB {campaign.raised_amount.toLocaleString()}
                   </div>
                   <div className="text-gray-600 mb-4">
@@ -423,19 +568,23 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setShowDonateModal(true)}
-                  className="w-full py-4 bg-gradient-to-r from-green-500 to-blue-600 text-white rounded-lg hover:from-green-600 hover:to-blue-700 transition-all shadow-md mb-3 flex items-center justify-center gap-2"
-                >
-                  <Heart className="w-5 h-5" />
-                  Donate Now
-                </button>
+                {canDonate && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDonateModal(true)}
+                    className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-green-500 to-blue-600 py-3 text-white shadow-md transition-all hover:from-green-600 hover:to-blue-700 sm:py-4"
+                  >
+                    <Heart className="h-5 w-5" />
+                    Donate Now
+                  </button>
+                )}
 
-                <button 
+                <button
+                  type="button"
                   onClick={() => setShowShareModal(true)}
-                  className="w-full py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-100 py-3 text-gray-700 transition-all hover:bg-gray-200"
                 >
-                  <Share2 className="w-5 h-5" />
+                  <Share2 className="h-5 w-5" />
                   Share Campaign
                 </button>
               </div>
@@ -497,16 +646,49 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
         </div>
       </div>
 
+      {canDonate && !showDonateModal && !showShareModal && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-sm lg:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mx-auto flex max-w-lg gap-2">
+            <button
+              type="button"
+              onClick={() => setShowShareModal(true)}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-800"
+            >
+              <Share2 className="h-4 w-4" />
+              Share
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDonateModal(true)}
+              className="flex flex-[1.4] items-center justify-center gap-2 rounded-xl bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700"
+            >
+              <Heart className="h-4 w-4" />
+              Donate
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!canDonate && !showShareModal && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-sm lg:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={() => setShowShareModal(true)}
+            className="mx-auto flex w-full max-w-lg items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-800"
+          >
+            <Share2 className="h-4 w-4" />
+            Share campaign
+          </button>
+        </div>
+      )}
+
       {showDonateModal && campaign && (
-        <DonateModal
-          campaign={campaign as any}
-          onClose={() => setShowDonateModal(false)}
-        />
+        <DonateModal campaign={campaign} onClose={() => setShowDonateModal(false)} />
       )}
 
       {showShareModal && campaign && (
         <ShareCampaignModal
-          campaign={campaign as any}
+          campaign={campaign}
           onClose={() => setShowShareModal(false)}
           onShare={() => setShareCount((c: number) => c + 1)}
         />

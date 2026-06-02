@@ -86,7 +86,7 @@ export const useUserWithdrawals = (): UseWithdrawalsResult => {
         const response = await apiRequest<{ success?: boolean; withdrawals?: WithdrawalApiRow[] } | WithdrawalApiRow[]>('/withdrawals/my', {
           authToken: token,
         });
-        const data = Array.isArray(response) ? response : response.withdrawals ?? [];
+        const data = Array.isArray(response) ? response : response.data ?? response.withdrawals ?? [];
         setWithdrawals(data.map(normalizeWithdrawal));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch withdrawals');
@@ -119,16 +119,17 @@ export const useRequestWithdrawal = (): UseRequestWithdrawalResult => {
 
       setLoading(true);
       setError(null);
-      const response = await apiRequest<{ success?: boolean; withdrawal?: WithdrawalApiRow }>('/withdrawals', {
+      const response = await apiRequest<{ success?: boolean; data?: WithdrawalApiRow; withdrawal?: WithdrawalApiRow }>('/withdrawals', {
         method: 'POST',
         body: JSON.stringify(data),
         authToken: token,
       });
-      if (!response.withdrawal) {
+      const withdrawal = response.data ?? response.withdrawal;
+      if (!withdrawal) {
         return null;
       }
 
-      return normalizeWithdrawal(response.withdrawal);
+      return normalizeWithdrawal(withdrawal);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to request withdrawal';
       setError(message);

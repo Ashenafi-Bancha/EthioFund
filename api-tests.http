@@ -1,0 +1,306 @@
+### ─── VARIABLES ──────────────────────────────────────────────────
+@baseUrl = http://localhost:5000/api
+@adminEmail = admin@ethiofund.com
+@adminPass = Admin@1234
+@donorEmail = donor@ethiofund.com
+@donorPass = Donor@1234
+@orgEmail = organizer@ethiofund.com
+@orgPass = Org@1234
+
+# After running the login requests below, copy the token values here:
+@adminToken = PASTE_ADMIN_TOKEN_HERE
+@donorToken = PASTE_DONOR_TOKEN_HERE
+@orgToken = PASTE_ORGANIZER_TOKEN_HERE
+@campaignId = 1
+@pendingCampaignId = 2
+
+### ─── TC-01: REGISTRATION ────────────────────────────────────────
+# TC-01 Step 1: Empty full name → 400
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{ "full_name": "", "email": "test@test.com", "phone_number": "+251911111111", "password": "Pass@123", "role": "donor" }
+
+###
+# TC-01 Step 11: Self-register as admin → 400
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{ "full_name": "Test Admin", "email": "testadmin@test.com", "phone_number": "+251911111111", "password": "Pass@123", "role": "admin" }
+
+###
+# TC-01 Step 12: Valid donor registration → 201
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{ "full_name": "Abebe Kebede", "email": "abebe@gmail.com", "phone_number": "+251911234567", "password": "Abebe@123", "role": "donor" }
+
+###
+### ─── TC-02: LOGIN ────────────────────────────────────────────────
+# TC-02 Step 4: Wrong password → 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{donorEmail}}", "password": "wrongpassword" }
+
+###
+# TC-02 Step 7: Admin login → 200 (copy token to @adminToken)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{adminEmail}}", "password": "{{adminPass}}" }
+
+###
+# TC-02 Step 7: Donor login → 200 (copy token to @donorToken)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{donorEmail}}", "password": "{{donorPass}}" }
+
+###
+# TC-02 Step 8: Organizer login → 200 (copy token to @orgToken)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "{{orgEmail}}", "password": "{{orgPass}}" }
+
+###
+### ─── TC-03: LOGOUT ───────────────────────────────────────────────
+# TC-03 Step 1: Authenticated donor logout → 200
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{donorToken}}
+
+###
+### ─── TC-04: MANAGE PROFILE ──────────────────────────────────────
+# TC-04 Step 6: Valid profile update → 200
+PUT {{baseUrl}}/users/me
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "full_name": "Abebe Tilahun", "phone_number": "+251922345678" }
+
+###
+# TC-04 Step 4: Attempt to change email (should be ignored) → 200
+PUT {{baseUrl}}/users/me
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "email": "hacker@evil.com" }
+
+###
+### ─── TC-05: VIEW CAMPAIGN ────────────────────────────────────────
+# TC-05 Step 1: Guest browses campaigns → 200 (only approved/active)
+GET {{baseUrl}}/campaigns
+
+###
+# TC-05 Step 3: View campaign by valid ID → 200
+GET {{baseUrl}}/campaigns/{{campaignId}}
+
+###
+# TC-05 Step 4: View campaign by invalid ID → 404
+GET {{baseUrl}}/campaigns/99999
+
+###
+# TC-05 Step 8: Filter by category → 200
+GET {{baseUrl}}/campaigns?category=medical
+
+###
+### ─── TC-07: CREATE CAMPAIGN ─────────────────────────────────────
+# TC-07 Step 4: Goal amount = 0 → 400
+POST {{baseUrl}}/campaigns
+Authorization: Bearer {{orgToken}}
+Content-Type: application/json
+
+{ "title": "Test Campaign", "description": "A test campaign description here.", "goal_amount": 0, "category": "medical" }
+
+###
+# TC-07 Step 7: Donor tries to create → 403
+POST {{baseUrl}}/campaigns
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "title": "Test", "description": "Test description with enough chars.", "goal_amount": 10000, "category": "medical" }
+
+###
+### ─── TC-09: APPROVE / REJECT CAMPAIGN ───────────────────────────
+# TC-09 Step 1: Admin approves pending campaign → 200
+PATCH {{baseUrl}}/campaigns/{{pendingCampaignId}}/approve
+Authorization: Bearer {{adminToken}}
+
+###
+# TC-09 Step 4: Organizer tries to approve → 403
+PATCH {{baseUrl}}/campaigns/{{campaignId}}/approve
+Authorization: Bearer {{orgToken}}
+
+###
+### ─── TC-10: POST CAMPAIGN UPDATE ────────────────────────────────
+# TC-10 Step 2: Organizer posts valid update → 201
+POST {{baseUrl}}/campaigns/{{campaignId}}/updates
+Authorization: Bearer {{orgToken}}
+Content-Type: application/json
+
+{ "content": "Surgery was successful. Funds have been used correctly. Thank you all!" }
+
+###
+# TC-10 Step 6: Public views campaign updates → 200
+GET {{baseUrl}}/campaigns/{{campaignId}}/updates
+
+###
+### ─── TC-11 & TC-12: DONATE AND PAYMENT ──────────────────────────
+# TC-11 Step 1: Amount = 0 → 400
+POST {{baseUrl}}/payments/initialize
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "amount": 0, "is_anonymous": false }
+
+###
+# TC-11 Step 7: Admin tries to donate → 403
+POST {{baseUrl}}/payments/initialize
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "amount": 500, "is_anonymous": false }
+
+###
+# TC-11 Step 8: Valid donation → 200 + checkout_url
+POST {{baseUrl}}/payments/initialize
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "amount": 500, "is_anonymous": false }
+
+###
+# TC-11 Step 9: Anonymous donation → 200
+POST {{baseUrl}}/payments/initialize
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "amount": 200, "is_anonymous": true }
+
+###
+### ─── TC-13: COMMENTS ─────────────────────────────────────────────
+# TC-13 Step 1: Empty content → 400
+POST {{baseUrl}}/comments
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "content": "" }
+
+###
+# TC-13 Step 2: No auth → 401
+POST {{baseUrl}}/comments
+Content-Type: application/json
+
+{ "campaign_id": 1, "content": "Great campaign!" }
+
+###
+# TC-13 Step 3: Valid comment → 201 (Gemini moderates)
+POST {{baseUrl}}/comments
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "content": "This is an amazing campaign. Wishing Alem a speedy recovery!" }
+
+###
+# TC-13 Step 5: Public views approved comments → 200
+GET {{baseUrl}}/comments/campaign/1
+
+###
+### ─── TC-14: DONATION HISTORY ────────────────────────────────────
+# TC-14 Step 1: Donor views own history → 200
+GET {{baseUrl}}/donations/my
+Authorization: Bearer {{donorToken}}
+
+###
+# TC-14 Step 6: Public views campaign donations (anonymous shown as Anonymous) → 200
+GET {{baseUrl}}/donations/campaign/1
+
+###
+### ─── TC-15: WITHDRAWAL ──────────────────────────────────────────
+# TC-15 Step 1: Amount = 0 → 400
+POST {{baseUrl}}/withdrawals
+Authorization: Bearer {{orgToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "amount": 0, "bank_account": "CBE-1234567890" }
+
+###
+# TC-15 Step 5: Donor tries to withdraw → 403
+POST {{baseUrl}}/withdrawals
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "amount": 5000, "bank_account": "CBE-1234567890" }
+
+###
+# TC-15 Step 6: Valid withdrawal request → 201 (status=pending)
+POST {{baseUrl}}/withdrawals
+Authorization: Bearer {{orgToken}}
+Content-Type: application/json
+
+{ "campaign_id": 1, "amount": 10000, "bank_account": "CBE-1234567890" }
+
+###
+# TC-15 Step 7: Admin approves withdrawal → 200
+PATCH {{baseUrl}}/withdrawals/1/approve
+Authorization: Bearer {{adminToken}}
+
+###
+### ─── TC-16: ADMIN DASHBOARD ─────────────────────────────────────
+# TC-16 Step 1: Admin views dashboard → 200 with all stats
+GET {{baseUrl}}/admin/dashboard
+Authorization: Bearer {{adminToken}}
+
+###
+# TC-16 Step 4: Organizer tries admin dashboard → 403
+GET {{baseUrl}}/admin/dashboard
+Authorization: Bearer {{orgToken}}
+
+###
+# TC-16 Step 6: Admin views all users (no passwords) → 200
+GET {{baseUrl}}/admin/users
+Authorization: Bearer {{adminToken}}
+
+###
+# TC-16 Step 7: Admin suspends a user → 200
+PATCH {{baseUrl}}/admin/users/2/suspend
+Authorization: Bearer {{adminToken}}
+
+###
+# TC-16 Step 8: Admin activates a suspended user → 200
+PATCH {{baseUrl}}/admin/users/2/activate
+Authorization: Bearer {{adminToken}}
+
+###
+### ─── TC-17: REPORTS ─────────────────────────────────────────────
+# TC-17 Step 1: Campaign report → 200
+GET {{baseUrl}}/reports?type=campaign
+Authorization: Bearer {{adminToken}}
+
+###
+# TC-17 Step 2: Donation report → 200
+GET {{baseUrl}}/reports?type=donation
+Authorization: Bearer {{adminToken}}
+
+###
+# TC-17 Step 3: User report → 200
+GET {{baseUrl}}/reports?type=user
+Authorization: Bearer {{adminToken}}
+
+###
+# TC-17 Step 4: Financial report → 200
+GET {{baseUrl}}/reports?type=financial
+Authorization: Bearer {{adminToken}}
+
+###
+# TC-17 Step 5: Invalid report type → 400
+GET {{baseUrl}}/reports?type=invalid
+Authorization: Bearer {{adminToken}}
+
+###
+# TC-17 Step 7: Organizer tries reports → 403
+GET {{baseUrl}}/reports?type=campaign
+Authorization: Bearer {{orgToken}}
+
+###

@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { ArrowLeft, Upload, Image as ImageIcon, FileText, CheckCircle } from 'lucide-react';
+import { Upload, Image as ImageIcon, FileText, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCreateCampaign } from '../hooks/useCampaigns';
 import { useAuth } from '../context/AuthContext';
+import { PageBackButton } from './PageBackButton';
 
 interface CreateCampaignProps {
   onNavigate: (page: string) => void;
+  onBack: () => void;
+  backLabel?: string;
 }
 
-export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
+export function CreateCampaign({ onNavigate, onBack, backLabel = 'Back to Dashboard' }: CreateCampaignProps) {
   const { user: currentUser } = useAuth();
   const { createCampaign } = useCreateCampaign();
   const [formData, setFormData] = useState({
@@ -83,6 +86,8 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
       duration_days: parseInt(formData.duration, 10),
       campaign_image: campaignImageFile,
       supporting_documents: documents,
+      bank_account: formData.bankAccount.trim(),
+      payout_phone: formData.phoneNumber.trim(),
     });
 
     if (result) {
@@ -113,13 +118,7 @@ export function CreateCampaign({ onNavigate }: CreateCampaignProps) {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={() => onNavigate('organizer-dashboard')}
-            className="mb-4 flex items-center gap-2 text-gray-600 transition-colors hover:text-gray-900"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Dashboard
-          </button>
+          <PageBackButton onBack={onBack} label={backLabel} className="mb-4" />
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Create New Campaign</h1>
           <p className="text-gray-600">Fill in the details below to start your fundraising campaign</p>
         </div>

@@ -2,13 +2,16 @@ import { useState, useMemo } from 'react';
 import { Mail, Lock, UserCircle, Eye, EyeOff, Phone } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import type { User, UserRole } from '../types/auth';
+import { PageBackButton } from './PageBackButton';
 
 interface AuthPageProps {
   onLogin: (user: User) => void;
   onNavigate: (page: string) => void;
+  onBack: () => void;
+  backLabel?: string;
 }
 
-export function AuthPage({ onLogin, onNavigate }: AuthPageProps) {
+export function AuthPage({ onLogin, onNavigate, onBack, backLabel = 'Back' }: AuthPageProps) {
   const { login, register } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -74,6 +77,7 @@ export function AuthPage({ onLogin, onNavigate }: AuthPageProps) {
 
         {/* Form */}
         <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
+          <PageBackButton onBack={onBack} label={backLabel} className="mb-4" />
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <>

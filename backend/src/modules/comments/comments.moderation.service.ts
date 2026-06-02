@@ -53,6 +53,8 @@ const extractJsonObject = (text: string): GeminiModerationPayload => {
 export const moderateCommentContent = async (content: string): Promise<CommentModerationResult> => {
   const model = env.GEMINI_MODEL || 'gemini-1.5-flash';
 
+  // Fallback check: If the Google Gemini API key is missing from environment variables,
+  // we fail-safe by placing the comment into 'pending_review' status so admins can review it manually.
   if (!env.GEMINI_API_KEY) {
     return {
       decision: 'pending_review',
@@ -63,6 +65,8 @@ export const moderateCommentContent = async (content: string): Promise<CommentMo
   }
 
   try {
+    // Construct strict instructions for the LLM. 
+    // We explicitly ask for a specific JSON shape without markdown formatting/backticks to ease parsing.
     const prompt = [
       'You are a strict moderation classifier for campaign comments on a crowdfunding platform.',
       'Classify the comment into one of these decisions: approved, pending_review, rejected.',
@@ -75,6 +79,7 @@ export const moderateCommentContent = async (content: string): Promise<CommentMo
       `Comment: ${content}`,
     ].join('\n');
 
+    // Send HTTP request to Gemini API. We set temperature to 0 for maximum determinism and consistency.
     const response = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${env.GEMINI_API_KEY}`,
       {
@@ -97,6 +102,7 @@ export const moderateCommentContent = async (content: string): Promise<CommentMo
       }
     );
 
+    // Extract text block returned by the LLM
     const text = response.data?.candidates?.[0]?.content?.parts
       ?.map((part: { text?: string }) => part.text || '')
       .join('')
@@ -106,6 +112,7 @@ export const moderateCommentContent = async (content: string): Promise<CommentMo
       throw new Error('Gemini moderation response was empty');
     }
 
+    // Attempt to extract the JSON block out of the generated string using regex and parse it
     const parsed = extractJsonObject(text);
 
     return {
@@ -115,6 +122,8 @@ export const moderateCommentContent = async (content: string): Promise<CommentMo
       model,
     };
   } catch (error) {
+    // If the Gemini API is down, times out, or fails to return parsable JSON,
+    // we fail-safe by setting the comment status to 'pending_review' so it is not lost but remains hidden until moderated.
     const reason = error instanceof Error ? error.message : 'Unknown Gemini moderation error';
 
     return {

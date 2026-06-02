@@ -14,6 +14,9 @@ const mapCampaign = (campaign: Record<string, unknown>) => {
     organizerName: campaign.organizer_name,
     goalAmount: Number(campaign.goal_amount),
     raisedAmount: Number(campaign.raised_amount),
+    availableAmount: Number(campaign.available_amount ?? campaign.raised_amount),
+    bankAccount: campaign.bank_account,
+    payoutPhone: campaign.payout_phone,
     createdAt: campaign.created_at,
     shareUrl: `${env.CLIENT_URL}/campaigns/${campaignId}`,
   };

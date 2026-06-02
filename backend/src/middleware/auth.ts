@@ -19,7 +19,7 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction): Re
     const [scheme, token] = authHeader.split(' ');
 
     if (scheme !== 'Bearer' || !token) {
-      return res.status(401).json({ success: false, message: 'Authentication token is required' });
+      return res.status(401).json({ success: false, message: 'Access denied. No token.' });
     }
 
     const decoded = jwt.verify(token, env.JWT_SECRET) as TokenPayload;

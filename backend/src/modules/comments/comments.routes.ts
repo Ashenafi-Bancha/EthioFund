@@ -10,7 +10,7 @@ router.get('/campaign/:campaign_id', controller.getCampaignComments);
 router.post(
   '/',
   verifyToken,
-  [body('campaign_id').isInt({ min: 1 }), body('content').trim().isLength({ min: 1, max: 2000 })],
+  [body('campaign_id').isInt({ min: 1 }), body('content').trim().notEmpty().withMessage('Comment content is required')],
   controller.addComment
 );
 router.delete('/:id', verifyToken, controller.deleteComment);

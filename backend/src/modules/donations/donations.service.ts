@@ -30,8 +30,8 @@ export const createDonation = async (donorId: string, input: DonationInput): Pro
   }
 
   if (!['approved', 'active'].includes(campaign.rows[0].status)) {
-    const error = new Error('Campaign is not open for donations');
-    (error as Error & { statusCode?: number }).statusCode = 403;
+    const error = new Error('Campaign is not available for donation');
+    (error as Error & { statusCode?: number }).statusCode = 400;
     throw error;
   }
 
@@ -53,12 +53,12 @@ export const getDonationById = async (donationId: string) => {
 export const getDonationsByCampaign = async (campaignId: string) => {
   const result = await pool.query(
     `SELECT d.donation_id, d.amount, d.donation_date, d.payment_status, d.is_anonymous,
-            CASE WHEN d.is_anonymous THEN NULL ELSE u.full_name END AS donor_name,
+            CASE WHEN d.is_anonymous = true THEN 'Anonymous' ELSE u.full_name END AS donor_name,
             COALESCE(t.gateway_name, 'chapa') AS payment_method
      FROM donations d
      LEFT JOIN users u ON u.user_id = d.donor_id
      LEFT JOIN transactions t ON t.donation_id = d.donation_id
-     WHERE d.campaign_id = $1
+     WHERE d.campaign_id = $1 AND d.payment_status = 'successful'
      ORDER BY d.donation_date DESC`,
     [campaignId]
   );
