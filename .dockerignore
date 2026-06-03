@@ -1,11 +1,28 @@
+# Dependencies
 **/node_modules
+
+# Build output
 **/dist
 **/.vite
+
+# Git metadata
 **/.git
+
+# Operating system files
 **/.DS_Store
+
+# Test coverage reports
 **/coverage
+
+# Log files
 **/*.log
+
+# TypeScript build cache
 **/*.tsbuildinfo
+
+# Environment variables
 **/.env
 **/.env.*
+
+# Keep environment example template
 !**/.env.example
