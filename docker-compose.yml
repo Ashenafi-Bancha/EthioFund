@@ -1,17 +1,26 @@
 services:
+  # PostgreSQL database service
   db:
     image: postgres:18-bookworm
     container_name: ethiofund-db
     restart: unless-stopped
+
+    # Database configuration
     environment:
       POSTGRES_DB: ${DB_NAME:-ethiofund_db}
       POSTGRES_USER: ${DB_USER:-ethiofund_user}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-ethiofund_password}
+
+    # Expose PostgreSQL port
     ports:
       - '5432:5432'
+
+    # Persistent storage and schema initialization
     volumes:
-      - db_data:/var/lib/postgresql\data
+      - db_data:/var/lib/postgresql/data
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+    # Check database availability
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-ethiofund_user} -d ${DB_NAME:-ethiofund_db}']
       interval: 10s
