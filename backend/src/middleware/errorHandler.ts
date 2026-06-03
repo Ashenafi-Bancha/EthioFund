@@ -4,9 +4,10 @@ type AppError = Error & {
   statusCode?: number;
   code?: string;
 };
+// Centralized error handler for the API.
+// Ensures consistent JSON error responses across the system
+// and maps authentication/database errors to user-friendly messages.
 
-// Centralized error handler for the API. Maps common Postgres and JWT
-// errors to friendly HTTP responses and ensures a consistent JSON shape.
 export const errorHandler = (err: AppError, _req: Request, res: Response, _next: NextFunction): Response => {
   void _next;
   console.error('Error:', err);
